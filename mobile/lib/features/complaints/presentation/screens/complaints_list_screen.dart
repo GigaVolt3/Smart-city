@@ -191,7 +191,7 @@ class _ComplaintsListScreenState extends State<ComplaintsListScreen> {
         icon: const Icon(Icons.add_rounded),
         label: const Text(
           'New Report',
-          style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
     );

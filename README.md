@@ -43,9 +43,9 @@ This project targets **₹0 cost**. All technologies are free and open-source. T
 
 | Phase | Description                                   | Status    |
 |-------|-----------------------------------------------|-----------|
-| 1     | Flutter foundation + navigation + demo UI     | ✅ Current |
-| 2     | FastAPI backend + PostgreSQL schema + seeds   | 🔲 Next   |
-| 3     | Flutter ↔ Backend integration + auth          | 🔲         |
+| 1     | Flutter foundation + navigation + demo UI     | ✅ Complete |
+| 2     | FastAPI backend + PostgreSQL schema + seeds   | ✅ Complete |
+| 3     | Flutter ↔ Backend integration + auth          | 🔲 Next   |
 | 4     | Escalation engine + scheduler + audit         | 🔲         |
 | 5     | AI classification + duplicate detection       | 🔲         |
 | 6     | Evidence upload + resolution verification     | 🔲         |

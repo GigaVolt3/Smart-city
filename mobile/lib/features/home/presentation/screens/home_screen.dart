@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/status_badge.dart';
-import '../../data/models/demo_data.dart';
+import '../../../../features/complaints/data/models/demo_data.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -172,7 +172,7 @@ class HomeScreen extends StatelessWidget {
         icon: const Icon(Icons.add_rounded),
         label: const Text(
           'Report Issue',
-          style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
     );

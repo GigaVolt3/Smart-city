@@ -1,0 +1,3 @@
+"""
+CivicAI Core Configuration Module
+"""

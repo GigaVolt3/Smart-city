@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../data/models/demo_data.dart';
+import '../../../../features/complaints/data/models/demo_data.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -266,15 +266,14 @@ class ProfileScreen extends StatelessWidget {
                     style: const TextStyle(fontSize: 22)),
                 title: Text(
                   lang.$2,
-                  style: const TextStyle(fontFamily: 'Inter'),
+                  style: const TextStyle(),
                 ),
                 trailing: lang.$3
                     ? const Icon(Icons.check_rounded,
                         color: AppTheme.tealAccent)
                     : Chip(
                         label: const Text('Phase 8',
-                            style: TextStyle(
-                                fontSize: 10, fontFamily: 'Inter')),
+                            style: const TextStyle(fontSize: 10)),
                         backgroundColor:
                             AppTheme.borderGray200,
                         padding: EdgeInsets.zero,
@@ -444,7 +443,8 @@ class _SwitchTileState extends State<_SwitchTile> {
       trailing: Switch.adaptive(
         value: _value,
         onChanged: (v) => setState(() => _value = v),
-        activeColor: AppTheme.tealAccent,
+        activeThumbColor: AppTheme.tealAccent,
+        activeTrackColor: AppTheme.tealAccent.withValues(alpha: 0.4),
       ),
     );
   }

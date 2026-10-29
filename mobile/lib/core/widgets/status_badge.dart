@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/app_theme.dart';
+import '../theme/app_theme.dart';
 
 /// Displays a complaint status badge with appropriate color coding.
 class StatusBadge extends StatelessWidget {

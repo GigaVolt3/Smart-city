@@ -19,6 +19,9 @@ backend/.mypy_cache/
 backend/htmlcov/
 backend/.coverage
 backend/uploads/
+*.db
+*.sqlite
+*.sqlite3
 
 # ── Flutter / Mobile ──────────────────────────────────────────────────────────
 mobile/.dart_tool/

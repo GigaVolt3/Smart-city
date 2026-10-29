@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/app_theme.dart';
+import '../theme/app_theme.dart';
 
 /// Reusable text field widget with consistent CivicAI styling.
 class CivicAITextField extends StatelessWidget {
