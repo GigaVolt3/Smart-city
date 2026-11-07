@@ -3,6 +3,7 @@ from backend.routers.users import router as users_router
 from backend.routers.departments import router as departments_router
 from backend.routers.categories import router as categories_router
 from backend.routers.complaints import router as complaints_router
+from backend.routers.ai import router as ai_router
 
 __all__ = [
     "auth_router",
@@ -10,4 +11,5 @@ __all__ = [
     "departments_router",
     "categories_router",
     "complaints_router",
+    "ai_router",
 ]

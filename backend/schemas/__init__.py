@@ -11,6 +11,20 @@ from backend.schemas.complaint import (
     AttachmentResponse,
     StatusHistoryResponse,
 )
+from backend.schemas.ai import (
+    ClassificationRequest,
+    ClassificationResponse,
+    ClassificationCandidate,
+    DuplicateCheckRequest,
+    DuplicateCheckResponse,
+    DuplicateMatch,
+    PriorityScoreRequest,
+    PriorityScoreResponse,
+    HotspotCluster,
+    HotspotsResponse,
+    HotspotsSummary,
+    ImageComparisonResponse,
+)
 
 __all__ = [
     "ErrorResponse",
@@ -39,4 +53,16 @@ __all__ = [
     "ComplaintDetailResponse",
     "AttachmentResponse",
     "StatusHistoryResponse",
+    "ClassificationRequest",
+    "ClassificationResponse",
+    "ClassificationCandidate",
+    "DuplicateCheckRequest",
+    "DuplicateCheckResponse",
+    "DuplicateMatch",
+    "PriorityScoreRequest",
+    "PriorityScoreResponse",
+    "HotspotCluster",
+    "HotspotsResponse",
+    "HotspotsSummary",
+    "ImageComparisonResponse",
 ]

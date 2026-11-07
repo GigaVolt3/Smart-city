@@ -20,8 +20,11 @@ from backend.schemas.complaint import (
     ComplaintDetailResponse,
     StatusHistoryResponse,
 )
+from backend.ai.priority_scorer import CivicPriorityScorer
 
 router = APIRouter(prefix="/complaints", tags=["Complaints"])
+
+priority_scorer = CivicPriorityScorer()
 
 
 def _generate_complaint_number(db: Session) -> str:
@@ -42,6 +45,7 @@ def create_complaint(
     """
     Submit a new civic complaint.
     Auto-assigns unique complaint_number, computes SLA due_at, and records initial status history.
+    If priority is not explicitly set, uses AI priority scoring engine.
     """
     # Verify department exists
     dept = db.query(Department).filter(Department.id == complaint_in.department_id).first()
@@ -62,12 +66,44 @@ def create_complaint(
             detail="Category not found or does not belong to the selected department",
         )
 
-    # Calculate SLA due date
-    now = datetime.now(timezone.utc)
-    due_at = now + timedelta(hours=category.sla_hours)
+    priority_order = {
+        ComplaintPriority.LOW.value: 1,
+        ComplaintPriority.MEDIUM.value: 2,
+        ComplaintPriority.HIGH.value: 3,
+        ComplaintPriority.CRITICAL.value: 4,
+    }
 
     # Priority determination
-    priority = complaint_in.priority.value if complaint_in.priority else category.priority_default
+    if complaint_in.priority:
+        priority = complaint_in.priority.value
+        initial_comments = "Grievance submitted by citizen"
+        sla_hours = category.sla_hours
+    else:
+        # Dynamic AI priority scoring
+        ai_eval = priority_scorer.score_complaint(
+            title=complaint_in.title,
+            description=complaint_in.description,
+            category_id=category.id,
+            ward=complaint_in.ward,
+            address=complaint_in.address,
+            landmark=complaint_in.landmark,
+            db=db,
+        )
+        ai_prio = ai_eval["priority_level"]
+        cat_prio = category.priority_default
+        if priority_order.get(ai_prio, 2) >= priority_order.get(cat_prio, 2):
+            priority = ai_prio
+            sla_hours = ai_eval["recommended_sla_hours"]
+            primary_factor = ai_eval["factors"][0] if ai_eval["factors"] else "AI evaluated priority"
+            initial_comments = f"Grievance submitted (AI Priority: {ai_prio.upper()} - {primary_factor})"
+        else:
+            priority = cat_prio
+            sla_hours = category.sla_hours
+            initial_comments = "Grievance submitted by citizen"
+
+    # Calculate SLA due date
+    now = datetime.now(timezone.utc)
+    due_at = now + timedelta(hours=sla_hours)
 
     complaint_number = _generate_complaint_number(db)
 
@@ -99,7 +135,7 @@ def create_complaint(
         previous_status=None,
         new_status=ComplaintStatus.SUBMITTED.value,
         changed_by_id=current_user.id,
-        comments="Grievance submitted by citizen",
+        comments=initial_comments,
         created_at=now,
     )
     db.add(initial_history)

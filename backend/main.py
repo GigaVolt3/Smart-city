@@ -13,6 +13,7 @@ from backend.routers import (
     departments_router,
     categories_router,
     complaints_router,
+    ai_router,
 )
 
 
@@ -101,3 +102,4 @@ app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(departments_router, prefix=settings.API_V1_STR)
 app.include_router(categories_router, prefix=settings.API_V1_STR)
 app.include_router(complaints_router, prefix=settings.API_V1_STR)
+app.include_router(ai_router, prefix=settings.API_V1_STR)
