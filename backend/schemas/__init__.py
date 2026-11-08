@@ -11,6 +11,17 @@ from backend.schemas.complaint import (
     AttachmentResponse,
     StatusHistoryResponse,
 )
+from backend.schemas.escalation import (
+    EscalationRuleCreate,
+    EscalationRuleUpdate,
+    EscalationRuleResponse,
+    EscalationEventResponse,
+    ManualEscalateRequest,
+    DeadlineExtensionRequest,
+    CheckerExecutionSummary,
+    WorkerStatusResponse,
+)
+from backend.schemas.notification import NotificationResponse, UnreadCountResponse
 
 __all__ = [
     "ErrorResponse",
@@ -39,4 +50,14 @@ __all__ = [
     "ComplaintDetailResponse",
     "AttachmentResponse",
     "StatusHistoryResponse",
+    "EscalationRuleCreate",
+    "EscalationRuleUpdate",
+    "EscalationRuleResponse",
+    "EscalationEventResponse",
+    "ManualEscalateRequest",
+    "DeadlineExtensionRequest",
+    "CheckerExecutionSummary",
+    "WorkerStatusResponse",
+    "NotificationResponse",
+    "UnreadCountResponse",
 ]

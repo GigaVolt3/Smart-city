@@ -6,6 +6,7 @@ from backend.models.category import ComplaintCategory
 from backend.models.user import User
 from backend.models.complaint import Complaint
 from backend.models.status_history import StatusHistory
+from backend.models.escalation import EscalationRule
 from backend.models.enums import UserRole, ComplaintStatus, ComplaintPriority
 
 
@@ -393,6 +394,75 @@ def seed_database():
                     db.add(hist)
 
                 print(f"  + Added Complaint: {complaint.complaint_number} - {complaint.title} ({complaint.status})")
+
+        # 5. Seed Municipal Escalation Rules
+        escalation_rules_data = [
+            # Department-wide rules for Roads
+            {
+                "department_id": depts["ROADS"].id,
+                "category_id": None,
+                "escalation_level": 1,
+                "trigger_hours": 24,
+                "target_role": UserRole.OFFICER.value,
+                "is_active": True,
+            },
+            {
+                "department_id": depts["ROADS"].id,
+                "category_id": None,
+                "escalation_level": 2,
+                "trigger_hours": 48,
+                "target_role": UserRole.SUPERVISOR.value,
+                "is_active": True,
+            },
+            {
+                "department_id": depts["ROADS"].id,
+                "category_id": None,
+                "escalation_level": 3,
+                "trigger_hours": 72,
+                "target_role": UserRole.ADMIN.value,
+                "is_active": True,
+            },
+            # Global fallback rules for any department
+            {
+                "department_id": None,
+                "category_id": None,
+                "escalation_level": 1,
+                "trigger_hours": 24,
+                "target_role": UserRole.OFFICER.value,
+                "is_active": True,
+            },
+            {
+                "department_id": None,
+                "category_id": None,
+                "escalation_level": 2,
+                "trigger_hours": 48,
+                "target_role": UserRole.SUPERVISOR.value,
+                "is_active": True,
+            },
+            {
+                "department_id": None,
+                "category_id": None,
+                "escalation_level": 3,
+                "trigger_hours": 72,
+                "target_role": UserRole.ADMIN.value,
+                "is_active": True,
+            },
+        ]
+
+        for rule_dict in escalation_rules_data:
+            existing_rule = (
+                db.query(EscalationRule)
+                .filter(
+                    EscalationRule.department_id == rule_dict["department_id"],
+                    EscalationRule.category_id == rule_dict["category_id"],
+                    EscalationRule.escalation_level == rule_dict["escalation_level"],
+                )
+                .first()
+            )
+            if not existing_rule:
+                rule = EscalationRule(**rule_dict)
+                db.add(rule)
+                print(f"  + Added EscalationRule: Level {rule.escalation_level} -> {rule.target_role}")
 
         db.commit()
         print("[OK] CivicAI database seeding completed successfully!")

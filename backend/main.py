@@ -13,7 +13,10 @@ from backend.routers import (
     departments_router,
     categories_router,
     complaints_router,
+    escalation_router,
+    notifications_router,
 )
+from backend.workers.escalation_worker import start_scheduler, shutdown_scheduler
 
 
 @asynccontextmanager
@@ -21,7 +24,13 @@ async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown procedures."""
     # Ensure all tables exist on startup (especially for SQLite or initial setup)
     Base.metadata.create_all(bind=engine)
-    yield
+    # Start APScheduler background escalation worker
+    start_scheduler()
+    try:
+        yield
+    finally:
+        # Gracefully shutdown background scheduler
+        shutdown_scheduler()
 
 
 app = FastAPI(
@@ -101,3 +110,5 @@ app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(departments_router, prefix=settings.API_V1_STR)
 app.include_router(categories_router, prefix=settings.API_V1_STR)
 app.include_router(complaints_router, prefix=settings.API_V1_STR)
+app.include_router(escalation_router, prefix=settings.API_V1_STR)
+app.include_router(notifications_router, prefix=settings.API_V1_STR)

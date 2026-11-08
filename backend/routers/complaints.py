@@ -13,6 +13,7 @@ from backend.models.category import ComplaintCategory
 from backend.models.department import Department
 from backend.models.user import User
 from backend.models.enums import UserRole, ComplaintStatus, ComplaintPriority
+from backend.services.deadline_service import calculate_deadline
 from backend.schemas.complaint import (
     ComplaintCreate,
     ComplaintStatusUpdate,
@@ -62,12 +63,12 @@ def create_complaint(
             detail="Category not found or does not belong to the selected department",
         )
 
-    # Calculate SLA due date
-    now = datetime.now(timezone.utc)
-    due_at = now + timedelta(hours=category.sla_hours)
-
     # Priority determination
     priority = complaint_in.priority.value if complaint_in.priority else category.priority_default
+
+    # Calculate SLA due date using deadline service
+    now = datetime.now(timezone.utc)
+    due_at = calculate_deadline(category.sla_hours, priority, now)
 
     complaint_number = _generate_complaint_number(db)
 
