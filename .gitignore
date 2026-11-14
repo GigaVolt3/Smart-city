@@ -1,60 +1,109 @@
-# CivicAI — Monorepo .gitignore
+# CivicAI — monorepo ignore rules
+# Rule of thumb: build output, local secrets, tool caches and IDE state stay out of git.
+# Anything a fresh clone needs to build must stay in.
 
 # ── Secrets ───────────────────────────────────────────────────────────────────
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
 *.pem
 *.key
+*.p12
+*.jks
+*.keystore
 secrets/
 
-# ── Python / Backend ──────────────────────────────────────────────────────────
-backend/__pycache__/
-backend/**/__pycache__/
-backend/*.pyc
-backend/.venv/
-backend/venv/
-backend/.pytest_cache/
-backend/.mypy_cache/
-backend/htmlcov/
-backend/.coverage
+# ── Python / backend ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
 backend/uploads/
 uploads/
 *.db
+*.db-journal
 *.sqlite
 *.sqlite3
-.pytest_cache/
 
-# ── Flutter / Mobile ──────────────────────────────────────────────────────────
+# ── Flutter / mobile ──────────────────────────────────────────────────────────
 mobile/.dart_tool/
+mobile/.packages
+mobile/.pub/
+mobile/.pub-cache/
 mobile/.flutter-plugins
 mobile/.flutter-plugins-dependencies
 mobile/build/
-mobile/.packages
-mobile/android/.gradle/
-mobile/android/local.properties
-mobile/android/key.properties
+mobile/coverage/
 mobile/**/*.g.dart
 mobile/**/*.freezed.dart
 mobile/**/*.mocks.dart
+mobile/app.*.symbols
+mobile/app.*.map.json
+mobile/android/.gradle/
+mobile/android/.kotlin/
+mobile/android/captures/
+mobile/android/local.properties
+mobile/android/key.properties
+mobile/android/app/debug/
+mobile/android/app/profile/
+mobile/android/app/release/
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/ios/Flutter/Flutter.framework
+mobile/ios/Flutter/Flutter.podspec
+mobile/ios/Flutter/.last_build_id
+mobile/macos/Pods/
+mobile/macos/Flutter/ephemeral/
+mobile/linux/flutter/ephemeral/
+mobile/windows/flutter/ephemeral/
 
-# ── Node / Dashboard ──────────────────────────────────────────────────────────
-dashboard/node_modules/
+# Signed/built app packages
+*.apk
+*.aab
+*.ipa
+*.app
+*.msix
+
+# ── Node / dashboard ──────────────────────────────────────────────────────────
+node_modules/
 dashboard/dist/
 dashboard/.vite/
+dashboard/coverage/
 dashboard/.env
-dashboard/*.tsbuildinfo
+dashboard/.env.*
+!.env.example
+*.tsbuildinfo
 
-# ── Tooling ──────────────────────────────────────────────────────────────────
+# ── Tooling / runtime junk ────────────────────────────────────────────────────
 .codebase-memory/
 *.log
+logs/
+*.tmp
+*.bak
+*.orig
+*.rej
+*.swp
+.history/
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
+.AppleDouble
+.LSOverride
 
-# ── IDE ───────────────────────────────────────────────────────────────────────
+# ── IDE / editor ──────────────────────────────────────────────────────────────
 .idea/
-.vscode/settings.json
 *.iml
+*.ipr
+*.iws
+.vscode/
