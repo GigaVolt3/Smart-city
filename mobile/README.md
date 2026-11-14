@@ -34,6 +34,23 @@ flutter build apk --release --dart-define=API_BASE_URL=https://api.example.gov/a
 flutter build web --release --dart-define=API_BASE_URL=https://api.example.gov/api/v1
 ```
 
+The universal APK lands at `build/app/outputs/flutter-apk/app-release.apk`
+(~53 MB; `--split-per-abi` produces ~20 MB arm64 and ~22 MB armeabi-v7a variants).
+Release is signed with the debug keystore — fine for sideloading and demos, not for
+Play Store submission. Generate a proper keystore and add a `signingConfigs.release`
+block before publishing.
+
+On a physical phone the backend must be reachable over the network, so pass your
+machine's LAN address (the default `10.0.2.2` only works inside the Android emulator):
+
+```bash
+flutter build apk --release --dart-define=API_BASE_URL=http://192.168.1.20:8000/api/v1
+adb install -r build/app/outputs/flutter-apk/app-release.apk
+```
+
+If Gradle fails with `Could not close incremental caches` on Windows, the workaround is
+already committed in `android/gradle.properties` (`kotlin.incremental=false`).
+
 ## Demo accounts
 
 Password `DemoPass1!` for every seeded account.

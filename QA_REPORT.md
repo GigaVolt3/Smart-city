@@ -15,7 +15,8 @@ municipality (5 departments, 10 categories, 10 users, 48 complaints).
 | Web type check + production build | `cd dashboard && npm run build` | Clean. `index` 482 kB, `charts` 397 kB, `maps` 154 kB, `query` 51 kB, `react` 44 kB |
 | Flutter static analysis | `cd mobile && flutter analyze` | **No issues found** |
 | Flutter tests | `cd mobile && flutter test` | Pass |
-| Flutter release build | `cd mobile && flutter build web --release` | Success |
+| Flutter release build (web) | `cd mobile && flutter build web --release` | Success |
+| Flutter release build (Android) | `cd mobile && flutter build apk --release` | Success — `app-release.apk`, 52.6 MB, debug-signed |
 
 Backend coverage on the new surface: notifications (list, unread count, mark one, mark all,
 delete, cross-user isolation), analytics (shape, role scoping, invalid window), escalations
