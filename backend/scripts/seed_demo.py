@@ -396,14 +396,16 @@ def seed_database():
                 print(f"  + Added Complaint: {complaint.complaint_number} - {complaint.title} ({complaint.status})")
 
         # 5. Seed Municipal Escalation Rules
+        # Hierarchy: Level 0 = Officer (initial), Level 1 = Supervisor (1st breach),
+        #            Level 2 = Admin/Municipal Commissioner (2nd breach)
         escalation_rules_data = [
-            # Department-wide rules for Roads
+            # Department-wide rules for Roads & Infrastructure
             {
                 "department_id": depts["ROADS"].id,
                 "category_id": None,
                 "escalation_level": 1,
                 "trigger_hours": 24,
-                "target_role": UserRole.OFFICER.value,
+                "target_role": UserRole.SUPERVISOR.value,   # 1st breach → Supervisor
                 "is_active": True,
             },
             {
@@ -411,15 +413,7 @@ def seed_database():
                 "category_id": None,
                 "escalation_level": 2,
                 "trigger_hours": 48,
-                "target_role": UserRole.SUPERVISOR.value,
-                "is_active": True,
-            },
-            {
-                "department_id": depts["ROADS"].id,
-                "category_id": None,
-                "escalation_level": 3,
-                "trigger_hours": 72,
-                "target_role": UserRole.ADMIN.value,
+                "target_role": UserRole.ADMIN.value,         # 2nd breach → Admin
                 "is_active": True,
             },
             # Global fallback rules for any department
@@ -428,7 +422,7 @@ def seed_database():
                 "category_id": None,
                 "escalation_level": 1,
                 "trigger_hours": 24,
-                "target_role": UserRole.OFFICER.value,
+                "target_role": UserRole.SUPERVISOR.value,   # 1st breach → Supervisor
                 "is_active": True,
             },
             {
@@ -436,19 +430,13 @@ def seed_database():
                 "category_id": None,
                 "escalation_level": 2,
                 "trigger_hours": 48,
-                "target_role": UserRole.SUPERVISOR.value,
-                "is_active": True,
-            },
-            {
-                "department_id": None,
-                "category_id": None,
-                "escalation_level": 3,
-                "trigger_hours": 72,
-                "target_role": UserRole.ADMIN.value,
+                "target_role": UserRole.ADMIN.value,         # 2nd breach → Admin
                 "is_active": True,
             },
         ]
 
+        # Upsert each rule: UPDATE if already exists, INSERT if not
+        # Preserves unrelated and custom database records (including legacy Level 3 rules)
         for rule_dict in escalation_rules_data:
             existing_rule = (
                 db.query(EscalationRule)
@@ -462,7 +450,23 @@ def seed_database():
             if not existing_rule:
                 rule = EscalationRule(**rule_dict)
                 db.add(rule)
-                print(f"  + Added EscalationRule: Level {rule.escalation_level} -> {rule.target_role}")
+                print(f"  + Added EscalationRule: Level {rule_dict['escalation_level']} -> {rule_dict['target_role']}")
+            else:
+                # Update existing record so the target_role and trigger_hours are correct
+                changed = False
+                if existing_rule.target_role != rule_dict["target_role"]:
+                    print(f"  ~ Updated EscalationRule Level {rule_dict['escalation_level']}: "
+                          f"{existing_rule.target_role} -> {rule_dict['target_role']}")
+                    existing_rule.target_role = rule_dict["target_role"]
+                    changed = True
+                if existing_rule.trigger_hours != rule_dict["trigger_hours"]:
+                    existing_rule.trigger_hours = rule_dict["trigger_hours"]
+                    changed = True
+                if existing_rule.is_active != rule_dict["is_active"]:
+                    existing_rule.is_active = rule_dict["is_active"]
+                    changed = True
+                if not changed:
+                    print(f"  = EscalationRule Level {rule_dict['escalation_level']} already correct, skipping")
 
         db.commit()
         print("[OK] CivicAI database seeding completed successfully!")

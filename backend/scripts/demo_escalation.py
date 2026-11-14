@@ -65,6 +65,35 @@ def run_demonstration():
             "Required seed accounts not found. Run 'python -m backend.scripts.seed_demo' first."
         )
 
+        # Ensure demonstration escalation rules are aligned with municipal policy:
+        # Level 1 -> Supervisor (24h), Level 2 -> Admin (48h)
+        for target_lvl, tgt_role, trg_hrs in [
+            (1, UserRole.SUPERVISOR.value, 24),
+            (2, UserRole.ADMIN.value, 48),
+        ]:
+            rule = (
+                db.query(EscalationRule)
+                .filter(
+                    EscalationRule.department_id == dept.id,
+                    EscalationRule.escalation_level == target_lvl,
+                )
+                .first()
+            )
+            if not rule:
+                db.add(EscalationRule(
+                    department_id=dept.id,
+                    category_id=None,
+                    escalation_level=target_lvl,
+                    trigger_hours=trg_hrs,
+                    target_role=tgt_role,
+                    is_active=True,
+                ))
+            else:
+                rule.target_role = tgt_role
+                rule.trigger_hours = trg_hrs
+                rule.is_active = True
+        db.commit()
+
         now = datetime.now(timezone.utc)
 
         # -------------------------------------------------------------
@@ -135,21 +164,23 @@ def run_demonstration():
         # -------------------------------------------------------------
         # STEP 6: Complaint is automatically escalated to Supervisor
         # -------------------------------------------------------------
-        print_step(6, "Verify automatic escalation to Level 2 (Supervisor)")
+        print_step(6, "Verify automatic escalation to Level 1 (Supervisor)")
         db.refresh(complaint)
         print(f" [OK] Complaint Status: {complaint.status.upper()}")
-        print(f"      Escalation Level: {complaint.escalation_level} (Level 2: Supervisor)")
+        print(f"      Escalation Level: {complaint.escalation_level} (Level 1: Supervisor)")
         print(f"      Reassigned To:    {complaint.assigned_officer.full_name} ({complaint.assigned_officer.role})")
-        assert complaint.escalation_level == 1 or complaint.assigned_officer_id in [officer.id, supervisor.id]
+        assert complaint.escalation_level == 1, f"Expected Level 1, got {complaint.escalation_level}"
+        assert complaint.assigned_officer_id == supervisor.id, f"Expected supervisor ID {supervisor.id}, got {complaint.assigned_officer_id}"
+        assert complaint.assigned_officer.role == UserRole.SUPERVISOR.value, f"Expected role supervisor, got {complaint.assigned_officer.role}"
 
         # -------------------------------------------------------------
         # STEP 7: Supervisor receives in-app notification
         # -------------------------------------------------------------
         print_step(7, "Verify in-app notification delivered to supervisor")
-        notifs = get_user_notifications(db, user_id=complaint.assigned_officer_id)
-        assert len(notifs) > 0, "No notification was dispatched"
-        latest_notif = notifs[0]
-        print(f" [OK] Alert found for {complaint.assigned_officer.full_name}:")
+        supervisor_notifs = get_user_notifications(db, user_id=supervisor.id)
+        assert len(supervisor_notifs) > 0, "No notification was dispatched to supervisor"
+        latest_notif = supervisor_notifs[0]
+        print(f" [OK] Alert found for Supervisor ({supervisor.full_name}):")
         print(f"      Subject: {latest_notif.title}")
         print(f"      Message: {latest_notif.message}")
         print(f"      Read Status: {'READ' if latest_notif.is_read else 'UNREAD'}")
@@ -161,8 +192,12 @@ def run_demonstration():
         events = get_complaint_escalation_history(db, complaint.id)
         assert len(events) >= 1
         ev1 = events[0]
+        assert ev1.from_level == 0, f"Expected from_level=0, got {ev1.from_level}"
+        assert ev1.to_level == 1, f"Expected to_level=1, got {ev1.to_level}"
+        assert ev1.escalated_to_id == supervisor.id, f"Expected escalated_to_id={supervisor.id}, got {ev1.escalated_to_id}"
         print(f" [OK] EscalationEvent #{ev1.id} logged:")
         print(f"      Transition: Level {ev1.from_level} -> Level {ev1.to_level}")
+        print(f"      Escalated To: {supervisor.full_name} (ID: {ev1.escalated_to_id})")
         print(f"      Trigger:    {ev1.trigger_type.upper()}")
         print(f"      Reason:     {ev1.reason}")
         print(f"      Timestamp:  {ev1.created_at}")
@@ -179,7 +214,7 @@ def run_demonstration():
         # -------------------------------------------------------------
         # STEP 10: Complaint moves to configured higher authority (Admin)
         # -------------------------------------------------------------
-        print_step(10, "Run checker again: Grievance escalates to Higher Authority")
+        print_step(10, "Run checker again: Grievance escalates to Level 2 (Admin)")
         summary2 = check_and_escalate_overdue_complaints(db)
         print(f" [OK] Checker Summary 2: Escalated={summary2['escalated']}")
 
@@ -188,12 +223,24 @@ def run_demonstration():
         # -------------------------------------------------------------
         print_step(11, "Verify secondary escalation event in database")
         db.refresh(complaint)
+        assert complaint.escalation_level == 2, f"Expected Level 2, got {complaint.escalation_level}"
+        assert complaint.assigned_officer_id == admin.id, f"Expected admin ID {admin.id}, got {complaint.assigned_officer_id}"
+        assert complaint.assigned_officer.role == UserRole.ADMIN.value, f"Expected role admin, got {complaint.assigned_officer.role}"
+
         events = get_complaint_escalation_history(db, complaint.id)
         assert len(events) >= 2
         ev2 = events[-1]
+        assert ev2.from_level == 1, f"Expected from_level=1, got {ev2.from_level}"
+        assert ev2.to_level == 2, f"Expected to_level=2, got {ev2.to_level}"
+        assert ev2.escalated_to_id == admin.id, f"Expected escalated_to_id={admin.id}, got {ev2.escalated_to_id}"
+
+        admin_notifs = get_user_notifications(db, user_id=admin.id)
+        assert len(admin_notifs) > 0, "No notification was dispatched to admin"
+
         print(f" [OK] Total Escalation Events: {len(events)}")
         print(f"      Latest Event #{ev2.id}: Level {ev2.from_level} -> Level {ev2.to_level}")
         print(f"      Current Authority:     {complaint.assigned_officer.full_name} ({complaint.assigned_officer.role})")
+        print(f" [OK] Admin notification delivered to {admin.full_name} ({admin_notifs[0].title})")
 
         # -------------------------------------------------------------
         # STEP 12: Run the checker again
@@ -208,6 +255,7 @@ def run_demonstration():
         print_step(13, "Verify duplicate escalation prevention guarantee")
         events_after = get_complaint_escalation_history(db, complaint.id)
         assert len(events_after) == len(events), "Duplicate escalation event was improperly created!"
+        assert len(events_after) == 2, f"Expected exactly 2 escalation events, got {len(events_after)}"
         print(f" [OK] Idempotency Verified: Event count remained exactly {len(events_after)} (No duplicates).")
 
         # -------------------------------------------------------------
@@ -230,6 +278,8 @@ def run_demonstration():
         summary4 = check_and_escalate_overdue_complaints(db)
         events_final = get_complaint_escalation_history(db, complaint.id)
         assert len(events_final) == len(events), "Resolved complaint was erroneously escalated!"
+        assert len(events_final) == 2, f"Expected exactly 2 escalation events, got {len(events_final)}"
+        assert complaint.status == ComplaintStatus.RESOLVED.value
         print(f" [OK] Checker skipped resolved grievance. Total events: {len(events_final)}.")
         print(f"      Complaint status remained: {complaint.status}")
 

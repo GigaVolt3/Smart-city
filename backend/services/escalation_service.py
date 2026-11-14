@@ -16,19 +16,21 @@ from backend.services.notification_service import dispatch_notification_safe
 
 logger = logging.getLogger("civicai.escalation")
 
-DEFAULT_MAX_ESCALATION_LEVEL = 3
+# Maximum escalation level before the complaint reaches the highest authority
+# Level 0  → Officer          (initial assignment, no escalation yet)
+# Level 1  → Supervisor       (1st SLA breach — first real escalation)
+# Level 2  → Admin/Municipal Commissioner (2nd SLA breach — final escalation)
+DEFAULT_MAX_ESCALATION_LEVEL = 2
 
 # Default municipal authority hierarchy when no custom rule is present in DB
 DEFAULT_ROLE_HIERARCHY = {
-    1: UserRole.OFFICER.value,      # Level 1: Ward Officer
-    2: UserRole.SUPERVISOR.value,   # Level 2: Dept Supervisor
-    3: UserRole.ADMIN.value,        # Level 3: Municipal Commissioner / Admin
+    1: UserRole.SUPERVISOR.value,   # Level 1: Dept Supervisor (1st SLA breach)
+    2: UserRole.ADMIN.value,        # Level 2: Municipal Commissioner / Admin (2nd SLA breach)
 }
 
 DEFAULT_TRIGGER_HOURS_PER_LEVEL = {
-    1: 24,
-    2: 48,
-    3: 72,
+    1: 24,   # Supervisor gets 24 h to act after first breach
+    2: 48,   # Admin gets 48 h to act after second breach
 }
 
 
@@ -199,6 +201,21 @@ def escalate_complaint(
         department_id=complaint.department_id,
     )
 
+    if not target_user:
+        logger.warning(
+            f"Escalation aborted for Complaint #{complaint.id} ({complaint.complaint_number}): "
+            f"No target authority user found with role '{target_role}' for escalation level {next_level}."
+        )
+        return {
+            "success": False,
+            "reason": "target_authority_not_found",
+            "complaint_id": complaint.id,
+            "complaint_number": complaint.complaint_number,
+            "escalation_level": next_level,
+            "target_role": target_role,
+            "detail": f"Target authority user not found for role '{target_role}' at escalation level {next_level}",
+        }
+
     # Calculate SLA delay
     overdue_hours = calculate_overdue_hours(complaint.due_at, now)
     escalation_reason = reason or (
@@ -219,7 +236,7 @@ def escalate_complaint(
             to_level=next_level,
             reason=escalation_reason,
             escalated_from_id=prev_assigned_id,
-            escalated_to_id=target_user.id if target_user else None,
+            escalated_to_id=target_user.id,
             trigger_type=trigger_type,
             deadline_exceeded_hours=overdue_hours,
             created_at=now,
@@ -229,8 +246,7 @@ def escalate_complaint(
         # 6. Update Complaint State
         complaint.escalation_level = next_level
         complaint.status = ComplaintStatus.ESCALATED.value
-        if target_user:
-            complaint.assigned_officer_id = target_user.id
+        complaint.assigned_officer_id = target_user.id
 
         # Extend due_at for the newly responsible authority to act
         complaint.due_at = now + timedelta(hours=extension_hours)
@@ -249,19 +265,18 @@ def escalate_complaint(
 
         # 8. Dispatch In-App Notifications
         # A) Alert to the newly assigned authority
-        if target_user:
-            dispatch_notification_safe(
-                db=db,
-                user_id=target_user.id,
-                title=f"Grievance Escalation Alert: #{complaint_num}",
-                message=(
-                    f"Complaint #{complaint_num} ('{complaint.title}') has been escalated "
-                    f"to Level {next_level} ({target_role}). Reason: {escalation_reason}. "
-                    f"Next deadline: {complaint.due_at.strftime('%Y-%m-%d %H:%M UTC')}."
-                ),
-                complaint_id=complaint.id,
-                notification_type="escalation",
-            )
+        dispatch_notification_safe(
+            db=db,
+            user_id=target_user.id,
+            title=f"Grievance Escalation Alert: #{complaint_num}",
+            message=(
+                f"Complaint #{complaint_num} ('{complaint.title}') has been escalated "
+                f"to Level {next_level} ({target_role}). Reason: {escalation_reason}. "
+                f"Next deadline: {complaint.due_at.strftime('%Y-%m-%d %H:%M UTC')}."
+            ),
+            complaint_id=complaint.id,
+            notification_type="escalation",
+        )
 
         # B) Courtesy update to the citizen
         if complaint.citizen_id:

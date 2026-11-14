@@ -133,12 +133,15 @@ def test_5_complaint_becomes_overdue_and_escalated(db_session, seed_data):
     db_session.refresh(complaint)
     assert complaint.escalation_level == 1
     assert complaint.status == ComplaintStatus.ESCALATED.value
+    assert complaint.assigned_officer_id == seed_data["supervisor"].id
 
     # Check escalation event record
     events = get_complaint_escalation_history(db_session, complaint.id)
     assert len(events) == 1
     assert events[0].from_level == 0
     assert events[0].to_level == 1
+    assert events[0].escalated_from_id == seed_data["officer"].id
+    assert events[0].escalated_to_id == seed_data["supervisor"].id
     assert events[0].trigger_type == "automatic"
     assert events[0].deadline_exceeded_hours >= 3.0
 
@@ -209,7 +212,7 @@ def test_7_rejected_complaint_not_escalated(db_session, seed_data):
 
 
 # ---------------------------------------------------------------------------
-# TEST 8: Officer to Supervisor escalation (Level 1 -> Level 2)
+# TEST 8: Officer to Supervisor escalation (Level 0 -> Level 1)
 # ---------------------------------------------------------------------------
 def test_8_officer_to_supervisor_escalation(db_session, seed_data):
     now = datetime.now(timezone.utc)
@@ -223,9 +226,9 @@ def test_8_officer_to_supervisor_escalation(db_session, seed_data):
         description="Assigned officer missed deadline.",
         ward="Ward 12",
         address="90 Main St",
-        status=ComplaintStatus.ESCALATED.value,
+        status=ComplaintStatus.ASSIGNED.value,
         priority=ComplaintPriority.HIGH.value,
-        escalation_level=1,
+        escalation_level=0,
         due_at=now - timedelta(hours=2),
         created_at=now - timedelta(days=3),
         updated_at=now,
@@ -233,32 +236,28 @@ def test_8_officer_to_supervisor_escalation(db_session, seed_data):
     db_session.add(complaint)
     db_session.commit()
 
-    # Create previous level 1 event so history is valid
-    prev_event = EscalationEvent(
-        complaint_id=complaint.id,
-        from_level=0,
-        to_level=1,
-        reason="Initial deadline breached",
-        escalated_to_id=seed_data["officer"].id,
-        trigger_type="automatic",
-        created_at=now - timedelta(days=1),
-    )
-    db_session.add(prev_event)
-    db_session.commit()
-
     result = escalate_complaint(db_session, complaint.id)
     assert result["success"] is True
-    assert result["from_level"] == 1
-    assert result["to_level"] == 2
+    assert result["from_level"] == 0
+    assert result["to_level"] == 1
     assert result["assigned_to_id"] == seed_data["supervisor"].id
 
     db_session.refresh(complaint)
-    assert complaint.escalation_level == 2
+    assert complaint.escalation_level == 1
     assert complaint.assigned_officer_id == seed_data["supervisor"].id
+    assert complaint.status == ComplaintStatus.ESCALATED.value
+
+    # Verify escalation event recorded
+    events = get_complaint_escalation_history(db_session, complaint.id)
+    assert len(events) == 1
+    assert events[0].from_level == 0
+    assert events[0].to_level == 1
+    assert events[0].escalated_from_id == seed_data["officer"].id
+    assert events[0].escalated_to_id == seed_data["supervisor"].id
 
 
 # ---------------------------------------------------------------------------
-# TEST 9: Supervisor to Higher Authority escalation (Level 2 -> Level 3)
+# TEST 9: Supervisor to Higher Authority (Admin) escalation (Level 1 -> Level 2)
 # ---------------------------------------------------------------------------
 def test_9_supervisor_to_higher_authority_escalation(db_session, seed_data):
     now = datetime.now(timezone.utc)
@@ -274,7 +273,7 @@ def test_9_supervisor_to_higher_authority_escalation(db_session, seed_data):
         address="100 Main St",
         status=ComplaintStatus.ESCALATED.value,
         priority=ComplaintPriority.CRITICAL.value,
-        escalation_level=2,
+        escalation_level=1,
         due_at=now - timedelta(hours=1),
         created_at=now - timedelta(days=5),
         updated_at=now,
@@ -282,19 +281,42 @@ def test_9_supervisor_to_higher_authority_escalation(db_session, seed_data):
     db_session.add(complaint)
     db_session.commit()
 
+    # Create previous level 1 event so history is valid
+    prev_event = EscalationEvent(
+        complaint_id=complaint.id,
+        from_level=0,
+        to_level=1,
+        reason="Initial deadline breached",
+        escalated_from_id=seed_data["officer"].id,
+        escalated_to_id=seed_data["supervisor"].id,
+        trigger_type="automatic",
+        created_at=now - timedelta(days=1),
+    )
+    db_session.add(prev_event)
+    db_session.commit()
+
     result = escalate_complaint(db_session, complaint.id)
     assert result["success"] is True
-    assert result["from_level"] == 2
-    assert result["to_level"] == 3
+    assert result["from_level"] == 1
+    assert result["to_level"] == 2
     assert result["assigned_to_id"] == seed_data["admin"].id
 
     db_session.refresh(complaint)
-    assert complaint.escalation_level == 3
+    assert complaint.escalation_level == 2
     assert complaint.assigned_officer_id == seed_data["admin"].id
+    assert complaint.status == ComplaintStatus.ESCALATED.value
+
+    # Verify escalation events recorded
+    events = get_complaint_escalation_history(db_session, complaint.id)
+    assert len(events) == 2
+    assert events[1].from_level == 1
+    assert events[1].to_level == 2
+    assert events[1].escalated_from_id == seed_data["supervisor"].id
+    assert events[1].escalated_to_id == seed_data["admin"].id
 
 
 # ---------------------------------------------------------------------------
-# TEST 10: Maximum escalation level prevented
+# TEST 10: Maximum escalation level prevented (Level 2 is max)
 # ---------------------------------------------------------------------------
 def test_10_maximum_escalation_level_prevented(db_session, seed_data):
     now = datetime.now(timezone.utc)
@@ -305,12 +327,12 @@ def test_10_maximum_escalation_level_prevented(db_session, seed_data):
         department_id=seed_data["dept"].id,
         category_id=seed_data["category"].id,
         title="Max level reached",
-        description="Complaint already at top authority.",
+        description="Complaint already at top authority (Admin).",
         ward="Ward 12",
         address="110 Main St",
         status=ComplaintStatus.ESCALATED.value,
         priority=ComplaintPriority.CRITICAL.value,
-        escalation_level=3,  # Already at MAX level
+        escalation_level=2,  # Already at MAX level (Level 2: Admin)
         due_at=now - timedelta(hours=10),
         created_at=now - timedelta(days=6),
         updated_at=now,
@@ -318,10 +340,14 @@ def test_10_maximum_escalation_level_prevented(db_session, seed_data):
     db_session.add(complaint)
     db_session.commit()
 
-    result = escalate_complaint(db_session, complaint.id, max_level=3)
+    result = escalate_complaint(db_session, complaint.id, max_level=2)
     assert result["success"] is False
     assert result["reason"] == "already_max_level"
-    assert result["level"] == 3
+    assert result["level"] == 2
+
+    db_session.refresh(complaint)
+    assert complaint.escalation_level == 2
+    assert complaint.assigned_officer_id == seed_data["admin"].id
 
 
 # ---------------------------------------------------------------------------
@@ -493,24 +519,25 @@ def test_14_unauthorized_escalation_attempts(client, seed_data):
 
 
 # ---------------------------------------------------------------------------
-# TEST 15: Missing authority recipient handled gracefully
+# TEST 15: Missing authority recipient handled gracefully (Failure response)
 # ---------------------------------------------------------------------------
 def test_15_missing_authority_recipient(db_session, seed_data):
     now = datetime.now(timezone.utc)
-    # Deactivate or remove any admins/supervisors temporarily or use level 4 where no user exists
+    original_due_at = now - timedelta(hours=2)
     complaint = Complaint(
         complaint_number="CIVIC-2026-9011",
         citizen_id=seed_data["citizen"].id,
+        assigned_officer_id=seed_data["officer"].id,
         department_id=seed_data["dept"].id,
         category_id=seed_data["category"].id,
         title="Missing authority recipient",
         description="Testing escalation when no user with role exists.",
         ward="Ward 12",
         address="150 Main St",
-        status=ComplaintStatus.SUBMITTED.value,
+        status=ComplaintStatus.ASSIGNED.value,
         priority=ComplaintPriority.MEDIUM.value,
         escalation_level=0,
-        due_at=now - timedelta(hours=2),
+        due_at=original_due_at,
         created_at=now,
         updated_at=now,
     )
@@ -528,13 +555,41 @@ def test_15_missing_authority_recipient(db_session, seed_data):
     db_session.add(fake_rule)
     db_session.commit()
 
-    # Escalation should complete without exception, setting assigned_to_id as None
+    # Escalation must fail gracefully with clear reason
     result = escalate_complaint(db_session, complaint.id)
-    assert result["success"] is True
-    assert result["assigned_to_id"] is None
+    assert result["success"] is False
+    assert result["reason"] == "target_authority_not_found"
 
     db_session.refresh(complaint)
-    assert complaint.escalation_level == 1
+    # Verification: complaint attributes remain completely unchanged
+    assert complaint.escalation_level == 0
+    assert complaint.assigned_officer_id == seed_data["officer"].id
+    assert complaint.status == ComplaintStatus.ASSIGNED.value
+    assert complaint.due_at.replace(tzinfo=timezone.utc) == original_due_at
+
+    # Verification: no escalation event is created
+    events = (
+        db_session.query(EscalationEvent)
+        .filter(EscalationEvent.complaint_id == complaint.id)
+        .all()
+    )
+    assert len(events) == 0
+
+    # Verification: no status history is created
+    history = (
+        db_session.query(StatusHistory)
+        .filter(StatusHistory.complaint_id == complaint.id)
+        .all()
+    )
+    assert len(history) == 0
+
+    # Verification: no citizen/authority notifications created
+    notifs = (
+        db_session.query(Notification)
+        .filter(Notification.complaint_id == complaint.id)
+        .all()
+    )
+    assert len(notifs) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -574,16 +629,16 @@ def test_16_notification_creation_on_escalation(db_session, seed_data):
     assert citizen_notif is not None
     assert "CIVIC-2026-9012" in citizen_notif.title or "CIVIC-2026-9012" in citizen_notif.message
 
-    # Check notification for newly assigned supervisor (Level 1 default role is officer, or supervisor)
+    # Check notification for newly assigned supervisor (Level 1 escalation assigns Supervisor)
     assigned_id = result["assigned_to_id"]
-    if assigned_id:
-        officer_notif = (
-            db_session.query(Notification)
-            .filter(Notification.user_id == assigned_id, Notification.complaint_id == complaint.id)
-            .first()
-        )
-        assert officer_notif is not None
-        assert "Escalation" in officer_notif.title
+    assert assigned_id == seed_data["supervisor"].id
+    supervisor_notif = (
+        db_session.query(Notification)
+        .filter(Notification.user_id == assigned_id, Notification.complaint_id == complaint.id)
+        .first()
+    )
+    assert supervisor_notif is not None
+    assert "Escalation" in supervisor_notif.title
 
 
 # ---------------------------------------------------------------------------
@@ -680,3 +735,158 @@ def test_18_database_rollback_after_failure(db_session, seed_data, monkeypatch):
         .all()
     )
     assert len(events) == 0
+
+
+# ---------------------------------------------------------------------------
+# TEST 19: Missing Admin authority during Level 1 -> Level 2 escalation
+# ---------------------------------------------------------------------------
+def test_19_missing_admin_authority_second_escalation(db_session, seed_data):
+    """
+    Verify Level 1 -> Level 2 escalation fails cleanly when no active Admin user exists.
+    """
+    now = datetime.now(timezone.utc)
+    original_due_at = now - timedelta(hours=1)
+    complaint = Complaint(
+        complaint_number="CIVIC-2026-9015",
+        citizen_id=seed_data["citizen"].id,
+        assigned_officer_id=seed_data["supervisor"].id,
+        department_id=seed_data["dept"].id,
+        category_id=seed_data["category"].id,
+        title="Missing admin test",
+        description="Testing escalation to Level 2 when Admin authority is missing.",
+        ward="Ward 12",
+        address="190 Main St",
+        status=ComplaintStatus.ESCALATED.value,
+        priority=ComplaintPriority.CRITICAL.value,
+        escalation_level=1,
+        due_at=original_due_at,
+        created_at=now - timedelta(days=2),
+        updated_at=now,
+    )
+    db_session.add(complaint)
+    db_session.commit()
+
+    # Create previous level 1 event
+    prev_event = EscalationEvent(
+        complaint_id=complaint.id,
+        from_level=0,
+        to_level=1,
+        reason="Initial deadline breached",
+        escalated_from_id=seed_data["officer"].id,
+        escalated_to_id=seed_data["supervisor"].id,
+        trigger_type="automatic",
+        created_at=now - timedelta(days=1),
+    )
+    db_session.add(prev_event)
+    db_session.commit()
+
+    # Rule pointing to a non-existent role for level 2
+    fake_admin_rule = EscalationRule(
+        department_id=seed_data["dept"].id,
+        escalation_level=2,
+        trigger_hours=48,
+        target_role="missing_admin_role",
+        is_active=True,
+    )
+    db_session.add(fake_admin_rule)
+    db_session.commit()
+
+    result = escalate_complaint(db_session, complaint.id)
+    assert result["success"] is False
+    assert result["reason"] == "target_authority_not_found"
+
+    db_session.refresh(complaint)
+    # Verification: complaint state remains at Level 1, assigned to supervisor
+    assert complaint.escalation_level == 1
+    assert complaint.assigned_officer_id == seed_data["supervisor"].id
+    assert complaint.status == ComplaintStatus.ESCALATED.value
+    assert complaint.due_at.replace(tzinfo=timezone.utc) == original_due_at
+
+    # Verification: No Level 2 escalation event created
+    l2_events = (
+        db_session.query(EscalationEvent)
+        .filter(EscalationEvent.complaint_id == complaint.id, EscalationEvent.to_level == 2)
+        .all()
+    )
+    assert len(l2_events) == 0
+
+    # Verification: No additional status history created for failed attempt
+    histories = (
+        db_session.query(StatusHistory)
+        .filter(StatusHistory.complaint_id == complaint.id)
+        .all()
+    )
+    assert len(histories) == 0
+
+    # Verification: No notification created for complaint
+    notifs = (
+        db_session.query(Notification)
+        .filter(Notification.complaint_id == complaint.id)
+        .all()
+    )
+    assert len(notifs) == 0
+
+
+# ---------------------------------------------------------------------------
+# TEST 20: Missing Supervisor authority during Level 0 -> Level 1 escalation
+# ---------------------------------------------------------------------------
+def test_20_missing_supervisor_authority_first_escalation(db_session, seed_data):
+    """
+    Verify Level 0 -> Level 1 escalation fails cleanly when no active Supervisor exists.
+    """
+    # Temporarily deactivate supervisor
+    supervisor = seed_data["supervisor"]
+    supervisor.is_active = False
+    db_session.commit()
+
+    try:
+        now = datetime.now(timezone.utc)
+        original_due_at = now - timedelta(hours=3)
+        complaint = Complaint(
+            complaint_number="CIVIC-2026-9016",
+            citizen_id=seed_data["citizen"].id,
+            assigned_officer_id=seed_data["officer"].id,
+            department_id=seed_data["dept"].id,
+            category_id=seed_data["category"].id,
+            title="Missing supervisor test",
+            description="Testing Level 1 escalation when supervisor is inactive/missing.",
+            ward="Ward 12",
+            address="200 Main St",
+            status=ComplaintStatus.ASSIGNED.value,
+            priority=ComplaintPriority.HIGH.value,
+            escalation_level=0,
+            due_at=original_due_at,
+            created_at=now,
+            updated_at=now,
+        )
+        db_session.add(complaint)
+        db_session.commit()
+
+        result = escalate_complaint(db_session, complaint.id)
+        assert result["success"] is False
+        assert result["reason"] == "target_authority_not_found"
+
+        db_session.refresh(complaint)
+        assert complaint.escalation_level == 0
+        assert complaint.assigned_officer_id == seed_data["officer"].id
+        assert complaint.status == ComplaintStatus.ASSIGNED.value
+        assert complaint.due_at.replace(tzinfo=timezone.utc) == original_due_at
+
+        # Verify no escalation event created
+        events = (
+            db_session.query(EscalationEvent)
+            .filter(EscalationEvent.complaint_id == complaint.id)
+            .all()
+        )
+        assert len(events) == 0
+
+        # Verify no notifications created
+        notifs = (
+            db_session.query(Notification)
+            .filter(Notification.complaint_id == complaint.id)
+            .all()
+        )
+        assert len(notifs) == 0
+    finally:
+        supervisor.is_active = True
+        db_session.commit()
