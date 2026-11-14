@@ -124,6 +124,9 @@ at exactly 48 complaints.
 | 15 | Priority scorer could downgrade a category below its configured default | Model score replaced the default | Category default is a floor, `[Category Default]` factor emitted |
 | 16 | Negative "time remaining" on some detail pages | SQLite naive datetimes parsed as local | `as_utc` server-side, `parseApiDate` client-side |
 | 17 | Mobile home had no primary reporting action above the fold | Reporting only via FAB | Full-width "Report a civic issue" button that invalidates caches and switches tab |
+| 18 | Signed release APK could not reach the backend at all | `INTERNET` permission only declared in the debug/profile manifests | Permission moved to the main manifest, cleartext HTTP allowed for the local API |
+| 19 | Installed APK was unusable off-emulator | Base URL was compile-time only and defaulted to `10.0.2.2` | Editable server target on the login screen, persisted in `shared_preferences` |
+| 20 | Demo-credential fill left "required field" errors on screen | Text controllers set without re-validating the form | Form re-validated after the prefill |
 
 ## 7. Accessibility and robustness spot checks
 

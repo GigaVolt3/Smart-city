@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/civic_ui.dart';
+import '../../data/api_client.dart';
 import '../../data/models.dart';
 import '../shell/app_shell.dart';
 
@@ -201,6 +203,8 @@ class _LoginPanelState extends ConsumerState<LoginPanel> {
   void _fillDemo() {
     _email.text = 'citizen@demo.civicai';
     _password.text = 'DemoPass1!';
+    // Clear any "required field" errors left over from an earlier submit.
+    _formKey.currentState?.validate();
   }
 
   @override
@@ -341,6 +345,8 @@ class _LoginPanelState extends ConsumerState<LoginPanel> {
               ],
             ),
           ),
+          const SizedBox(height: 14),
+          const ServerTargetTile(),
         ],
       ),
     );
@@ -558,6 +564,118 @@ class _BrandMark extends StatelessWidget {
         Icons.location_city_rounded,
         size: size * 0.52,
         color: dark ? AppColors.amber : AppColors.primary,
+      ),
+    );
+  }
+}
+
+/// Lets the user point the installed app at whichever host is running the
+/// CivicAI API. Sideloaded builds default to the emulator loopback address,
+/// which is useless on a physical phone, so the target is editable here.
+class ServerTargetTile extends ConsumerStatefulWidget {
+  const ServerTargetTile({super.key});
+
+  @override
+  ConsumerState<ServerTargetTile> createState() => _ServerTargetTileState();
+}
+
+class _ServerTargetTileState extends ConsumerState<ServerTargetTile> {
+  Future<void> _edit() async {
+    final api = ref.read(apiProvider);
+    final controller = TextEditingController(text: api.baseUrl);
+    final saved = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Backend address'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              decoration: const InputDecoration(
+                labelText: 'API URL',
+                hintText: '192.168.1.20:8000',
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Use 10.0.2.2:8000 for the Android emulator, or your computer '
+              'LAN address (for example 192.168.1.20:8000) for a phone on the '
+              'same Wi-Fi.',
+              style: TextStyle(fontSize: 12, color: AppColors.ink3),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final prefs = SharedPreferences.getInstance();
+              prefs.then((value) => value.remove(ApiClient.prefsKey));
+              Navigator.of(context).pop(ApiClient.defaultBaseUrl());
+            },
+            child: const Text('Use default'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (saved == null) return;
+
+    final normalized = ApiClient.normalizeBaseUrl(saved);
+    api.setBaseUrl(normalized);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(ApiClient.prefsKey, normalized);
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Backend set to $normalized')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final baseUrl = ref.watch(apiProvider).baseUrl;
+    return InkWell(
+      onTap: _edit,
+      borderRadius: BorderRadius.circular(AppRadii.md),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        child: Row(
+          children: [
+            const Icon(Icons.dns_outlined, size: 16, color: AppColors.ink3),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Server: $baseUrl',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.ink3,
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Text(
+              'Change',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primaryDark,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

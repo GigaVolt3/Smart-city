@@ -23,9 +23,18 @@ flutter run -d emulator-5554
 flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8000/api/v1
 ```
 
-The base URL resolution order is: `--dart-define=API_BASE_URL`, then
-`http://10.0.2.2:8000/api/v1` on Android, then `http://127.0.0.1:8000/api/v1` elsewhere.
-The trailing `/api/v1` is required.
+The base URL resolution order is: a URL saved from the in-app server setting,
+then `--dart-define=API_BASE_URL`, then `http://10.0.2.2:8000/api/v1` on Android,
+then `http://127.0.0.1:8000/api/v1` elsewhere. The trailing `/api/v1` is optional
+in the in-app field — it is added automatically.
+
+## Point the app at your backend without rebuilding
+
+The login screen shows `Server: http://10.0.2.2:8000/api/v1` with a **Change**
+link. Enter any reachable host (`192.168.1.20:8000`, `10.0.2.2:8000`, a full
+`https://api.example.gov/api/v1`), hit Save, and the app uses it from then on —
+the value is persisted in `shared_preferences`. This is how a sideloaded APK
+works on a real phone without a custom build.
 
 ## Build
 
@@ -40,13 +49,20 @@ Release is signed with the debug keystore — fine for sideloading and demos, no
 Play Store submission. Generate a proper keystore and add a `signingConfigs.release`
 block before publishing.
 
-On a physical phone the backend must be reachable over the network, so pass your
-machine's LAN address (the default `10.0.2.2` only works inside the Android emulator):
+On a physical phone the backend must be reachable over the network: either set the
+address from the login screen's **Change** link (no rebuild), or bake it in at build
+time (`10.0.2.2` only works inside the Android emulator):
 
 ```bash
 flutter build apk --release --dart-define=API_BASE_URL=http://192.168.1.20:8000/api/v1
 adb install -r build/app/outputs/flutter-apk/app-release.apk
 ```
+
+The release manifest declares `android.permission.INTERNET` and
+`android:usesCleartextTraffic="true"` (the local FastAPI server is plain HTTP).
+Without the permission the release APK silently fails every request with the
+"Cannot reach the CivicAI service" message, even though debug builds work — the
+debug manifest adds `INTERNET` on its own.
 
 If Gradle fails with `Could not close incremental caches` on Windows, the workaround is
 already committed in `android/gradle.properties` (`kotlin.incremental=false`).

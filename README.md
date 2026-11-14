@@ -72,6 +72,20 @@ Password for every seeded account: `DemoPass1!`
 | `supervisor@demo.civicai` | Supervisor, Roads |
 | `admin@demo.civicai` | Municipal administrator |
 
+## Install the Android app
+
+1. Download `app-release.apk` from the latest release:
+   <https://github.com/GigaVolt3/Smart-city/releases/latest/download/app-release.apk>
+2. Allow installs from the browser/file manager when prompted (signed with a debug
+   keystore — fine for demos, not for Play Store).
+3. Run the API so the phone can reach it:
+   `python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000`
+4. In the app, tap **Change** next to `Server:` on the sign-in screen and enter the host
+   running the API — `10.0.2.2:8000` inside the Android emulator, or
+   `<your-computer-ip>:8000` for a phone on the same Wi-Fi. `/api/v1` is appended
+   automatically.
+5. Sign in with `citizen@demo.civicai` / `DemoPass1!` (or officer, supervisor, admin).
+
 ## Repository layout
 
 ```

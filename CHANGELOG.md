@@ -2,6 +2,28 @@
 
 All notable changes to CivicAI. Versions follow [SemVer](https://semver.org/).
 
+## [1.2.1] — 2026-11-14
+
+Release-APK fixes found while running the signed build on a real Android device.
+
+### Fixed — Mobile
+
+- Release APK had no `android.permission.INTERNET`: every request failed with
+  "Cannot reach the CivicAI service" even with the backend running. Debug builds hid the
+  bug because Flutter's debug manifest adds the permission. The main manifest now
+  declares `INTERNET`, and `android:usesCleartextTraffic="true"` so the plain-HTTP local
+  API is reachable.
+- App label is now `CivicAI` instead of `civicai` in the launcher and task switcher.
+
+### Added — Mobile
+
+- In-app backend target: the login screen shows the active API URL with a **Change**
+  action, validates and normalises whatever the user types (`host:port`,
+  `http://host:port`, full `/api/v1` URL), persists it, and uses it for the rest of the
+  session. A sideloaded APK now works on any phone without rebuilding.
+- "Use citizen demo credentials" re-runs form validation so stale "required field" errors
+  clear as soon as the fields are filled.
+
 ## [1.2.0] — 2026-11-13
 
 Full product delivery: web operations console, mobile client rewrite, backend feature

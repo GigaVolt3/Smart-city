@@ -20,16 +20,43 @@ class ApiException implements Exception {
 /// Thin HTTP client around the CivicAI FastAPI backend.
 class ApiClient {
   ApiClient({String? baseUrl, http.Client? httpClient})
-      : baseUrl = baseUrl ?? _defaultBaseUrl(),
+      : _baseUrl = normalizeBaseUrl(baseUrl ?? defaultBaseUrl()),
         _http = httpClient ?? http.Client();
 
-  final String baseUrl;
+  /// Shared-preferences key holding a user-configured API base URL.
+  static const prefsKey = 'civicai.api_base_url';
+
   final http.Client _http;
+  String _baseUrl;
   String? _token;
 
-  static String _defaultBaseUrl() {
+  /// Base URL currently in use, e.g. `http://10.0.2.2:8000/api/v1`.
+  String get baseUrl => _baseUrl;
+
+  /// Switches the backend the app talks to (used by the in-app server
+  /// setting so a sideloaded build can point at any reachable host).
+  void setBaseUrl(String value) => _baseUrl = normalizeBaseUrl(value);
+
+  /// Accepts `host:port`, `http://host:port` or a full `.../api/v1` URL and
+  /// returns a clean `scheme://host[:port]/api/v1` base URL.
+  static String normalizeBaseUrl(String raw) {
+    var url = raw.trim();
+    if (url.isEmpty) return defaultBaseUrl();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'http://$url';
+    }
+    while (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+    if (!url.endsWith('/api/v1')) {
+      url = '$url/api/v1';
+    }
+    return url;
+  }
+
+  static String defaultBaseUrl() {
     const override = String.fromEnvironment('API_BASE_URL');
-    if (override.isNotEmpty) return override;
+    if (override.isNotEmpty) return normalizeBaseUrl(override);
     if (kIsWeb) return 'http://127.0.0.1:8000/api/v1';
     if (defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:8000/api/v1';

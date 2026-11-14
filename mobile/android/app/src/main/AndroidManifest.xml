@@ -1,8 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The app is an API client; without this the release build cannot make
+         any network request at all (debug builds got it from the debug
+         manifest, which is why the bug only showed up in the signed APK). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="civicai"
+        android:label="CivicAI"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

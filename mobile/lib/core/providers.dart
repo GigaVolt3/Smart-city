@@ -6,7 +6,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/api_client.dart';
 import '../data/models.dart';
 
-final apiProvider = Provider<ApiClient>((ref) => ApiClient());
+/// API base URL persisted on the device, resolved in `main()` before the
+/// first frame. `null` means "use the platform default".
+final initialApiBaseUrlProvider = Provider<String?>((ref) => null);
+
+final apiProvider = Provider<ApiClient>(
+  (ref) => ApiClient(baseUrl: ref.watch(initialApiBaseUrlProvider)),
+);
 
 /// Index of the visible bottom-navigation tab, shared so in-page actions
 /// (for example "Review breached") can switch tabs.
