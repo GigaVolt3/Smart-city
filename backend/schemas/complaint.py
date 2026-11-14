@@ -5,6 +5,7 @@ from backend.models.enums import ComplaintStatus, ComplaintPriority
 from backend.schemas.user import UserResponse
 from backend.schemas.department import DepartmentResponse
 from backend.schemas.category import CategoryResponse
+from backend.schemas.escalation import EscalationEventResponse
 
 
 class ComplaintCreate(BaseModel):
@@ -81,6 +82,16 @@ class ComplaintDetailResponse(ComplaintResponse):
     category: Optional[CategoryResponse] = None
     attachments: List[AttachmentResponse] = []
     status_history: List[StatusHistoryResponse] = []
+    escalation_events: List[EscalationEventResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ComplaintPage(BaseModel):
+    items: List[ComplaintResponse]
+    total: int
+    skip: int
+    limit: int
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -14,8 +14,14 @@ from backend.core.config import settings
 from backend.core.deps import get_current_user
 from backend.models.user import User
 from backend.models.enums import UserRole
-from backend.schemas.user import UserRegister, UserResponse
+from backend.schemas.user import (
+    PasswordChange,
+    ProfileUpdate,
+    UserRegister,
+    UserResponse,
+)
 from backend.schemas.auth import LoginRequest, TokenResponse, RefreshTokenRequest
+from backend.services.audit import record_audit
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -77,6 +83,15 @@ def login(login_in: LoginRequest, db: Session = Depends(get_db)):
     access_token = create_access_token(token_payload)
     refresh_token = create_refresh_token(token_payload)
 
+    record_audit(
+        db,
+        user=user,
+        action="auth.login",
+        resource_type="session",
+        details=f"role={user.role}",
+    )
+    db.commit()
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -129,3 +144,56 @@ def refresh_token(refresh_in: RefreshTokenRequest, db: Session = Depends(get_db)
 def get_current_user_profile(current_user: User = Depends(get_current_user)):
     """Retrieve currently authenticated user's profile."""
     return UserResponse.model_validate(current_user)
+
+
+@router.put("/me", response_model=UserResponse)
+def update_current_user_profile(
+    profile_in: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update the signed-in user's own profile details."""
+    updates = profile_in.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(current_user, field, value)
+    record_audit(
+        db,
+        user=current_user,
+        action="profile.updated",
+        resource_type="user",
+        resource_id=current_user.id,
+        details=", ".join(updates.keys()) or "no changes",
+    )
+    db.commit()
+    db.refresh(current_user)
+    return UserResponse.model_validate(current_user)
+
+
+@router.post("/change-password", response_model=dict)
+def change_password(
+    payload: PasswordChange,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Change the signed-in user's password after verifying the current one."""
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+    if payload.current_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from the current password",
+        )
+
+    current_user.hashed_password = hash_password(payload.new_password)
+    record_audit(
+        db,
+        user=current_user,
+        action="profile.password_changed",
+        resource_type="user",
+        resource_id=current_user.id,
+    )
+    db.commit()
+    return {"message": "Password updated successfully", "success": True}

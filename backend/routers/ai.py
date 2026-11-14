@@ -22,6 +22,7 @@ from backend.schemas.ai import (
     HotspotsResponse,
     ImageComparisonResponse,
 )
+from backend.services.uploads import disk_path_for_public_path
 
 router = APIRouter(prefix="/ai", tags=["AI Engine"])
 
@@ -196,7 +197,7 @@ async def verify_complaint_resolution(
         )
 
     try:
-        with open(first_attachment.file_path, "rb") as f:
+        with open(disk_path_for_public_path(first_attachment.file_path), "rb") as f:
             before_bytes = f.read()
     except Exception as e:
         raise HTTPException(

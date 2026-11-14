@@ -25,7 +25,19 @@ class UserUpdate(BaseModel):
     phone_number: Optional[str] = Field(None, max_length=20)
     ward: Optional[str] = Field(None, max_length=50)
     department_id: Optional[int] = None
+    role: Optional[UserRole] = None
     is_active: Optional[bool] = None
+
+
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = Field(None, min_length=2, max_length=100)
+    phone_number: Optional[str] = Field(None, max_length=20)
+    ward: Optional[str] = Field(None, max_length=50)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=100)
+    new_password: str = Field(..., min_length=8, max_length=100)
 
 
 class UserResponse(UserBase):

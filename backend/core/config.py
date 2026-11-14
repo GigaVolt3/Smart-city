@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     # Escalation & Worker
     DEV_MODE: bool = True
     ESCALATION_CHECK_INTERVAL_SECONDS: int = 60
+    ESCALATION_ENGINE_ENABLED: bool = True
+    MAX_ESCALATION_LEVEL: int = 3
+
+    # Uploads
+    MAX_UPLOAD_MB: int = 8
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

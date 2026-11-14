@@ -6,7 +6,13 @@ from backend.core.database import get_db
 from backend.core.deps import require_roles
 from backend.models.department import Department
 from backend.models.enums import UserRole
-from backend.schemas.department import DepartmentCreate, DepartmentResponse
+from backend.models.user import User
+from backend.schemas.department import (
+    DepartmentCreate,
+    DepartmentResponse,
+    DepartmentUpdate,
+)
+from backend.services.audit import record_audit
 
 router = APIRouter(prefix="/departments", tags=["Departments"])
 
@@ -53,4 +59,33 @@ def get_department(department_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Department not found",
         )
+    return dept
+
+
+@router.patch("/{department_id}", response_model=DepartmentResponse)
+def update_department(
+    department_id: int,
+    dept_in: DepartmentUpdate,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_roles([UserRole.ADMIN])),
+):
+    """Update a department's public contact details (Admin only)."""
+    dept = db.query(Department).filter(Department.id == department_id).first()
+    if not dept:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Department not found"
+        )
+    updates = dept_in.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(dept, field, value)
+    record_audit(
+        db,
+        user=admin_user,
+        action="department.updated",
+        resource_type="department",
+        resource_id=dept.id,
+        details=", ".join(updates.keys()),
+    )
+    db.commit()
+    db.refresh(dept)
     return dept

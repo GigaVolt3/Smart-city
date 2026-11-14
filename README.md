@@ -1,58 +1,131 @@
-# CivicAI — AI-Powered Smart Civic Grievance and Escalation System
+# CivicAI
 
-> **Final-Year Engineering Project** | Indian Municipality Smart Governance Platform
+AI-assisted civic grievance and escalation platform for Indian municipalities.
 
-CivicAI is a mobile-first civic complaint management system designed for Indian municipalities. Citizens can report civic issues (potholes, garbage, broken streetlights, water leakage, etc.) and the system uses AI to classify, deduplicate, prioritize and automatically escalate unresolved complaints through a configurable authority chain.
+Citizens report civic issues from a mobile app or the web portal. The backend scores
+priority, routes the complaint to the right department, tracks an SLA clock, and
+escalates unresolved cases up a configurable authority chain. Municipal staff work the
+same data from a desktop operations console with maps, analytics, assignment, evidence
+review, and an immutable audit trail.
 
----
+Three deployables share one FastAPI backend and one SQLite/PostgreSQL database:
 
-## Monorepo Structure
+| App | Path | Stack | Purpose |
+| --- | --- | --- | --- |
+| Operations console | `dashboard/` | React 19, Vite, TypeScript, TanStack Query, Recharts, Leaflet | Desktop-first staff console |
+| Mobile app | `mobile/` | Flutter 3.41, Riverpod, flutter_map, http | Citizen/officer field app (Android + web) |
+| API | `backend/` | FastAPI, SQLAlchemy 2, APScheduler, scikit-learn | Auth, complaints, analytics, escalation, audit |
+
+## What actually works
+
+- JWT auth with refresh, four roles (`citizen`, `officer`, `supervisor`, `admin`) and
+  role-scoped queries enforced on every read path.
+- Complaint intake with AI category suggestion, priority scoring, SLA derivation, and
+  sequential tracking numbers (`CIVIC-2026-0001`).
+- Status workflow with immutable timeline, officer assignment, and in-app notifications.
+- Photo/PDF evidence upload stored on disk and served from `/uploads`.
+- SLA breach detection plus a configurable escalation engine (rules per level, rerun on
+  demand or via the background worker).
+- Analytics overview: KPIs, status/priority mix, 30-day trend, department and ward
+  performance, SLA compliance, hotspot coordinates.
+- Admin surfaces: departments, categories, users, escalation rules, audit log.
+- Mobile app with bottom navigation, touch-sized controls, offline-tolerant list
+  caching, camera/gallery evidence capture, and a live hotspot map.
+
+## Quick start
+
+Requirements: Python 3.11+, Node 20+, Flutter 3.41+ (mobile/web only).
+
+```bash
+# 1. API
+python -m venv .venv
+source .venv/bin/activate            # Windows: .venv\Scripts\activate
+pip install -r backend/requirements.txt
+cp backend/.env.example backend/.env
+python -m backend.scripts.seed_demo  # 48 complaints, 10 users, 5 departments
+python -m uvicorn backend.main:app --reload --port 8000
+# http://127.0.0.1:8000/docs
+
+# 2. Web console
+cd dashboard
+npm install
+npm run dev
+# http://127.0.0.1:5173
+
+# 3. Mobile (web preview or device)
+cd mobile
+flutter pub get
+flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1
+```
+
+The seed script refuses to run against a database that already has users; pass
+`--force` to wipe and rebuild the demo dataset.
+
+### Demo accounts
+
+Password for every seeded account: `DemoPass1!`
+
+| Email | Role |
+| --- | --- |
+| `citizen@demo.civicai` | Citizen (Ward 12) |
+| `officer@demo.civicai` | Officer, Roads |
+| `supervisor@demo.civicai` | Supervisor, Roads |
+| `admin@demo.civicai` | Municipal administrator |
+
+## Repository layout
 
 ```
-civicai/
-├── mobile/          # Flutter Android application (Dart)
-├── backend/         # Python FastAPI REST API + AI services
-├── dashboard/       # React authority dashboard (Phase 7)
-└── docs/            # Architecture, schema, API docs, setup guides
+backend/
+  ai/                 priority scorer, classifier, duplicate detection
+  core/               config, database, security, dependencies
+  models/             SQLAlchemy models
+  routers/            auth, users, departments, categories, complaints, ai,
+                      analytics, notifications, escalations, audit
+  schemas/            Pydantic request/response models
+  services/           escalation engine, notifications, uploads, audit, scoping
+  scripts/seed_demo.py
+  tests/              50 pytest cases
+
+dashboard/src/
+  pages/              dashboard, complaints, detail, new, map, analytics,
+                      departments, users, escalations, audit, notifications,
+                      profile, auth, 404
+  components/         layout, charts, maps, complaint primitives, ui
+  providers/          auth session, toasts
+  hooks/queries.ts    TanStack Query hooks for every endpoint
+  styles/globals.css  the whole design system and responsive rules
+
+mobile/lib/
+  data/               typed models + API client
+  core/               providers, theme, formatting, shared widgets
+  features/           auth, shell, home, complaints, map, notifications, profile
+
+docs/                 architecture and setup notes
 ```
 
-## Quick Start
+## Quality gates
 
-See individual component READMEs:
-- [Mobile (Flutter)](mobile/README.md)
-- [Backend (FastAPI)](backend/README.md)
-- [Dashboard (React)](dashboard/README.md)
-- [Documentation](docs/README.md)
+```bash
+python -m pytest backend/tests -q                       # 50 passed
+cd dashboard && npm run build                           # tsc -b + vite build
+cd mobile && flutter analyze && flutter test
+```
 
-## Tech Stack
+## Documentation
 
-| Layer       | Technology                                      |
-|-------------|-------------------------------------------------|
-| Mobile      | Flutter 3.44+, Dart 3.12+, Riverpod, GoRouter  |
-| Backend     | Python 3.14, FastAPI, SQLAlchemy, APScheduler  |
-| Database    | PostgreSQL 15 + PostGIS (SQLite fallback)       |
-| AI / ML     | scikit-learn, sentence-transformers, OpenCV     |
-| Dashboard   | React 19, Vite, TanStack Query                 |
-| Auth        | JWT (python-jose), bcrypt                       |
+- [PROJECT_ANALYSIS.md](PROJECT_ANALYSIS.md) — baseline audit, gaps, decisions
+- [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — phases, deliverables, status
+- [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) — tokens, components, responsive rules
+- [QA_REPORT.md](QA_REPORT.md) — test matrix, screenshots, defects fixed
+- [docs/screenshots/](docs/screenshots/) — 26 captured screens (web desktop, web mobile, Flutter)
+- [CHANGELOG.md](CHANGELOG.md) — release history
+- [docs/architecture.md](docs/architecture.md) — system architecture
+- [docs/setup.md](docs/setup.md) — environment troubleshooting
 
-## Budget
+## Limits
 
-This project targets **₹0 cost**. All technologies are free and open-source. The application runs fully locally during development and demonstration.
+The default configuration is a single-node demo deployment: SQLite, local disk uploads,
+in-process scheduler, and an AI scorer based on keyword/heuristic models rather than a
+trained municipal dataset. See PROJECT_ANALYSIS.md for the production gap list.
 
-## Development Phases
-
-| Phase | Description                                   | Status    |
-|-------|-----------------------------------------------|-----------|
-| 1     | Flutter foundation + navigation + demo UI     | ✅ Complete |
-| 2     | FastAPI backend + PostgreSQL schema + seeds   | ✅ Complete |
-| 3     | Flutter ↔ Backend integration + auth          | 🔲 Next   |
-| 4     | Escalation engine + scheduler + audit         | 🔲         |
-| 5     | AI classification + duplicate detection       | 🔲         |
-| 6     | Evidence upload + resolution verification     | 🔲         |
-| 7     | React authority dashboard                     | 🔲         |
-| 8     | Predictive maintenance + Kannada locale       | 🔲         |
-| 9     | Testing, docs, clean-env verification         | 🔲         |
-
-## License
-
-MIT — for academic demonstration purposes only. Not for production municipal deployment.
+MIT licensed, academic use.

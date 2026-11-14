@@ -7,7 +7,9 @@ from backend.core.deps import require_roles
 from backend.models.category import ComplaintCategory
 from backend.models.department import Department
 from backend.models.enums import UserRole
-from backend.schemas.category import CategoryCreate, CategoryResponse
+from backend.models.user import User
+from backend.schemas.category import CategoryCreate, CategoryResponse, CategoryUpdate
+from backend.services.audit import record_audit
 
 router = APIRouter(prefix="/categories", tags=["Categories"])
 
@@ -72,4 +74,38 @@ def get_category(category_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Category not found",
         )
+    return category
+
+
+@router.patch("/{category_id}", response_model=CategoryResponse)
+def update_category(
+    category_id: int,
+    cat_in: CategoryUpdate,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_roles([UserRole.ADMIN])),
+):
+    """Update category SLA, default priority, description, or active state (Admin only)."""
+    category = db.query(ComplaintCategory).filter(ComplaintCategory.id == category_id).first()
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Category not found"
+        )
+    updates = cat_in.model_dump(exclude_unset=True)
+    if "priority_default" in updates and updates["priority_default"] is not None:
+        value = updates["priority_default"]
+        updates["priority_default"] = value.value if hasattr(value, "value") else value
+
+    for field, value in updates.items():
+        setattr(category, field, value)
+
+    record_audit(
+        db,
+        user=admin_user,
+        action="category.updated",
+        resource_type="category",
+        resource_id=category.id,
+        details=", ".join(updates.keys()),
+    )
+    db.commit()
+    db.refresh(category)
     return category

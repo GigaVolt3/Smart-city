@@ -109,10 +109,12 @@ class CivicPriorityScorer:
         # 4. Base Category Risk & SLA Factor (Max 15)
         base_cat_pts = 5  # default medium
         cat_sla_hours = 48
+        cat_priority: Optional[str] = None
         if db and category_id:
             cat = db.query(ComplaintCategory).filter(ComplaintCategory.id == category_id).first()
             if cat:
                 cat_sla_hours = cat.sla_hours
+                cat_priority = cat.priority_default
                 if cat.priority_default == ComplaintPriority.CRITICAL.value:
                     base_cat_pts = 15
                 elif cat.priority_default == ComplaintPriority.HIGH.value:
@@ -141,7 +143,20 @@ class CivicPriorityScorer:
             recommended_sla_hours = min(cat_sla_hours, 48)
         else:
             priority_level = ComplaintPriority.LOW
-            recommended_sla_hours = max(cat_sla_hours, 72)
+            recommended_sla_hours = cat_sla_hours
+
+        # The category default priority is a floor: a text score alone must not
+        # downgrade a category that the municipality has classified as high risk.
+        if cat_priority:
+            priority_rank = {
+                ComplaintPriority.LOW.value: 0,
+                ComplaintPriority.MEDIUM.value: 1,
+                ComplaintPriority.HIGH.value: 2,
+                ComplaintPriority.CRITICAL.value: 3,
+            }
+            if priority_rank.get(cat_priority, 1) > priority_rank.get(priority_level.value, 1):
+                priority_level = ComplaintPriority(cat_priority)
+                recommended_sla_hours = cat_sla_hours
 
         if not factors:
             factors.append("Standard civic grievance within regular routine SLA thresholds.")

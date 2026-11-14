@@ -19,9 +19,11 @@ backend/.mypy_cache/
 backend/htmlcov/
 backend/.coverage
 backend/uploads/
+uploads/
 *.db
 *.sqlite
 *.sqlite3
+.pytest_cache/
 
 # ── Flutter / Mobile ──────────────────────────────────────────────────────────
 mobile/.dart_tool/
@@ -41,6 +43,11 @@ dashboard/node_modules/
 dashboard/dist/
 dashboard/.vite/
 dashboard/.env
+dashboard/*.tsbuildinfo
+
+# ── Tooling ──────────────────────────────────────────────────────────────────
+.codebase-memory/
+*.log
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store

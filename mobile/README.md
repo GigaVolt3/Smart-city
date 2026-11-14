@@ -1,94 +1,100 @@
-# CivicAI Mobile — Flutter Android App
+# CivicAI Mobile
 
-## Phase 1 Status
+Citizen and field-officer app for the CivicAI platform. Flutter, Riverpod, real REST
+backend — no demo data.
 
-✅ Screens implemented with demo data:
-- Splash → Onboarding → Login / Register
-- Home (stats, quick actions, recent complaints)
-- My Complaints (search + filter)
-- Complaint Detail (complete timeline)
-- Submit Complaint (4-step form)
-- Notifications
-- Profile (language picker)
+## Requirements
 
-⚠️  All data is clearly labelled **DEMO DATA**. Phase 3 connects to the real backend.
+- Flutter 3.41+ / Dart 3.11+
+- A running CivicAI API (see `../backend/README.md`)
 
-## Running the App
+## Run
 
-### Prerequisites
-- Flutter 3.44+ (`flutter --version`)
-- Android device connected via USB (or emulator running)
-- USB debugging enabled on device
+```bash
+flutter pub get
 
-### Steps
+# Web preview (fastest for review)
+flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1
 
-```powershell
-cd mobile
-flutter pub get          # Install dependencies
-flutter run              # Run on connected Android device
+# Android emulator: 10.0.2.2 maps to the host machine
+flutter run -d emulator-5554
+
+# Physical device on the same network
+flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8000/api/v1
 ```
 
-### Useful commands
+The base URL resolution order is: `--dart-define=API_BASE_URL`, then
+`http://10.0.2.2:8000/api/v1` on Android, then `http://127.0.0.1:8000/api/v1` elsewhere.
+The trailing `/api/v1` is required.
 
-```powershell
-flutter devices          # List connected devices
-flutter run -d <id>      # Run on a specific device
-flutter analyze          # Static analysis
-flutter test             # Run unit tests
+## Build
+
+```bash
+flutter build apk --release --dart-define=API_BASE_URL=https://api.example.gov/api/v1
+flutter build web --release --dart-define=API_BASE_URL=https://api.example.gov/api/v1
 ```
 
-## Folder Structure
+## Demo accounts
+
+Password `DemoPass1!` for every seeded account.
+
+| Email | Role | What the app shows |
+| --- | --- | --- |
+| `citizen@demo.civicai` | Citizen | Own cases, own KPIs, report form |
+| `officer@demo.civicai` | Officer | Department queue, assignment, status updates |
+| `supervisor@demo.civicai` | Supervisor | Department oversight |
+| `admin@demo.civicai` | Administrator | Full municipal dataset |
+
+## Structure
 
 ```
 lib/
-├── main.dart
-├── core/
-│   ├── theme/app_theme.dart        # Design system
-│   ├── router/app_router.dart      # GoRouter + navigation shell
-│   └── widgets/                    # Shared UI components
-└── features/
-    ├── splash/
-    ├── onboarding/
-    ├── auth/
-    ├── home/
-    ├── complaints/
-    ├── notifications/
-    └── profile/
+  main.dart                     app bootstrap, theme, auth gate
+  data/
+    models.dart                 typed API models and parsers
+    api_client.dart             auth, complaints, analytics, hotspots,
+                                notifications, attachments; token refresh
+  core/
+    providers.dart              riverpod: auth session, filters, analytics,
+                                notifications, unread count, shell tab
+    theme/app_theme.dart        shared design tokens and widget themes
+    utils/format.dart           dates, relative time, SLA labels, numbers
+    widgets/civic_ui.dart       KPI tiles, status pills, section cards,
+                                skeletons, empty/error states
+  features/
+    auth/auth_screen.dart       sign in / register
+    shell/app_shell.dart        bottom navigation + report FAB
+    home/home_screen.dart       KPIs, status mix, attention queue, activity
+    complaints/complaints_screen.dart
+    complaints/complaint_detail_screen.dart
+    complaints/report_screen.dart
+    map/map_screen.dart         flutter_map + hotspot overlay
+    notifications/notifications_screen.dart
+    profile/profile_screen.dart
 ```
 
-## Dependencies
+## Behaviour notes
 
-| Package              | Purpose                          |
-|----------------------|----------------------------------|
-| flutter_riverpod     | State management                 |
-| go_router            | Navigation / routing             |
-| dio                  | HTTP client (Phase 3)            |
-| flutter_secure_storage | JWT token storage (Phase 3)    |
-| image_picker         | Camera / gallery (Phase 3)       |
-| geolocator           | GPS location (Phase 3)           |
-| flutter_map          | OpenStreetMap display (Phase 3)  |
-| intl                 | Date/number formatting           |
-| shimmer              | Loading skeletons                |
+- Tokens are stored with `shared_preferences`. A 401 triggers a single refresh attempt;
+  if that fails the session is cleared and the auth screen appears.
+- Every list has loading skeletons, an empty state, and an error state with retry.
+- Pull-to-refresh invalidates the matching providers.
+- Status updates and complaint creation invalidate complaints, analytics, and unread
+  counts together so the home screen never shows stale numbers.
+- Evidence photos are picked from camera or gallery (`image_picker`) and uploaded as
+  multipart form data; failures surface the server's message.
+- The map uses OpenStreetMap tiles plus hotspot circles from `/ai/hotspots`.
 
-## Fonts
+## Checks
 
-Inter font (400/500/600/700 weights) is declared in `pubspec.yaml`.
-**You must download the font files** and place them in `assets/fonts/`:
-- `Inter-Regular.ttf`
-- `Inter-Medium.ttf`
-- `Inter-SemiBold.ttf`
-- `Inter-Bold.ttf`
+```bash
+flutter analyze     # no issues
+flutter test        # auth screen smoke test
+flutter build web --release
+```
 
-Download from: https://fonts.google.com/specimen/Inter
+## Known constraints
 
-> Alternatively, remove the font declaration from `pubspec.yaml` and the app
-> will fall back to the system default font — it will still work.
-
-## Known Limitations (Phase 1)
-
-- No real backend connection — all data is demo/mock
-- Image picker and camera are declared but not wired up
-- GPS location picker uses a hardcoded demo coordinate
-- Map preview is a placeholder (Phase 3 integrates flutter_map)
-- Push notifications are not implemented (Phase 4)
-- Authentication does not verify credentials (Phase 3)
+- Web build has no camera capture (browser file picker only).
+- No offline write queue; reads are cached in memory for the session only.
+- English only.

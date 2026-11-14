@@ -7,6 +7,7 @@ from backend.models.complaint import Complaint, ComplaintAttachment
 from backend.models.status_history import StatusHistory
 from backend.models.escalation import EscalationRule, EscalationEvent
 from backend.models.audit import AuditEvent
+from backend.models.notification import Notification
 
 __all__ = [
     "Base",
@@ -22,4 +23,5 @@ __all__ = [
     "EscalationRule",
     "EscalationEvent",
     "AuditEvent",
+    "Notification",
 ]
