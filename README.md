@@ -86,6 +86,7 @@ Password for every seeded account: `DemoPass1!`
 | 6 | Stops whatever is listening on 8000 and 5173 |
 | 7 | Builds the release APK and installs it on the phone plugged in by USB, then prints the address the phone must use for the API |
 | 8 | Installs/repairs every dependency: Python venv + `backend/requirements.txt`, `npm ci` in `dashboard`, `flutter pub get` in `mobile`, and the release signing key |
+| r | Redraws the status block, re-reading the address the phone should use |
 | 0 | Exit |
 
 Double-click it, or run one action directly:
@@ -98,10 +99,12 @@ start-civicai.bat 7      # build + install on a USB phone
 ```
 
 The status block at the top shows whether the API, the website and the emulator are
-already up, and whether the dependencies are installed. Options 1, 2, 3 and 4 install
-whatever they need on first use (backed by a virtualenv in `.venv`), so a fresh clone
-only needs Python, Node.js and Flutter on `PATH`. Both servers stay running in their
-own windows when the launcher closes.
+already up, whether the dependencies are installed, and — while the API runs — the
+address other devices use for it (`Phone    : http://192.168.137.1:8000 (PC hotspot)`).
+It is re-read on every redraw, so turning the hotspot on and pressing `r` updates it.
+Options 1, 2, 3 and 4 install whatever they need on first use (backed by a virtualenv in
+`.venv`), so a fresh clone only needs Python, Node.js and Flutter on `PATH`. Both
+servers stay running in their own windows when the launcher closes.
 
 Option 4 needs the Android SDK; if `adb`, the emulator or a system image is missing it
 offers to download them (~1.5 GB, one time) and creates an `ms_test` AVD automatically.
@@ -140,7 +143,9 @@ The app appends `/api/v1` itself, so enter only `host:port`.
 | Android emulator | `10.0.2.2:8000` |
 
 To confirm on the phone: Settings → Wi-Fi → tap the connected network → **Gateway**.
-That gateway is the machine running the API. Option 7 prints the value it detects.
+That gateway is the machine running the API. The launcher prints the value it detects —
+both after starting the API and in the status block — and labels how it was found
+(`PC hotspot`, `phone hotspot`, `same Wi-Fi`).
 
 If the phone reports "Cannot reach the CivicAI service" with the right address, it is
 almost always Windows Firewall: Windows created an allow rule for the system

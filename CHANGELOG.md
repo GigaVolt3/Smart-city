@@ -17,6 +17,10 @@ All notable changes to CivicAI. Versions follow [SemVer](https://semver.org/).
   whether anything is still missing.
 - Launcher option 7 builds the release APK and installs it on a USB-attached phone,
   then prints the LAN address the phone must use for the API.
+- While the API runs, the status block shows that address as `Phone    : ...`, labelled
+  by how it was found (`PC hotspot` = 192.168.137.1, `phone hotspot` = 192.168.43.x,
+  `same Wi-Fi` = the machine's own IPv4). `r` redraws it, so turning the hotspot on
+  after the servers start updates the value without restarting anything.
 
 ### Fixed
 

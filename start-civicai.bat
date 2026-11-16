@@ -74,6 +74,7 @@ echo    [5] Reset mobile app data (server back to 10.0.2.2:8000)
 echo    [6] Stop API + website
 echo    [7] Install the app on a phone connected by USB cable
 echo    [8] Install / repair all dependencies  (Python, Node, Flutter)
+echo    [r] Refresh the status block   (re-reads the phone address)
 echo    [0] Exit
 echo ---------------------------------------------------------------
 set "CHOICE="
@@ -89,6 +90,7 @@ if "%CHOICE%"=="5" goto do_reset
 if "%CHOICE%"=="6" goto do_stop
 if "%CHOICE%"=="7" goto do_phone
 if "%CHOICE%"=="8" goto do_deps
+if /i "%CHOICE%"=="r" goto menu
 if "%CHOICE%"=="0" goto end
 echo.
 echo Unknown option "%CHOICE%".
@@ -105,18 +107,22 @@ call :start_web
 call :wait_web
 if errorlevel 2 goto action_done
 start "" "%WEB_URL%"
+call :lan_url
 echo.
 echo   Website     : %WEB_URL%
 echo   API docs    : %API_URL%/docs
-echo   Mobile host : 10.0.2.2:%API_PORT%   (option 4 opens the app)
+echo   Phone URL   : http://%PHONE_URL%   (%NET_KIND% - type this in the app)
+echo   Emulator    : 10.0.2.2:%API_PORT%   (option 4 opens the app)
 goto action_done
 
 :do_api
 call :start_api
 call :wait_api
 if errorlevel 2 goto action_done
+call :lan_url
 echo.
-echo   API docs: %API_URL%/docs
+echo   API docs  : %API_URL%/docs
+echo   Phone URL : http://%PHONE_URL%   (%NET_KIND%)
 goto action_done
 
 :do_web
@@ -176,7 +182,7 @@ if errorlevel 1 goto action_done
 echo.
 call :lan_url
 echo   The app is installed. On the sign-in screen tap Change next to "Server:"
-echo   and enter the address above (or %PHONE_URL%), then sign in with
+echo   and enter  %PHONE_URL%   (%NET_KIND%), then sign in with
 echo   citizen@demo.civicai / DemoPass1!
 goto action_done
 
@@ -200,10 +206,23 @@ goto menu
 rem --------------------------- helpers ---------------------------------------
 
 :show_status
-call :port_up %API_PORT% && (echo    API      : running on %API_URL%) || (echo    API      : stopped)
+call :port_up %API_PORT%
+if not errorlevel 1 (
+  echo    API      : running on %API_URL%
+  call :lan_url
+  call :phone_line
+) else (
+  echo    API      : stopped
+)
 call :port_up %WEB_PORT% && (echo    Website  : running on %WEB_URL%) || (echo    Website  : stopped)
 call :device_ready && (echo    Emulator : attached) || (echo    Emulator : not running)
 call :deps_ready && (echo    Deps     : ready) || (echo    Deps     : missing - run option 8)
+exit /b 0
+
+:phone_line
+rem Prints the address other devices reach the API on. Kept as its own label so
+rem the value is expanded when the line runs, not when the caller is parsed.
+echo    Phone    : http://%PHONE_URL%   (%NET_KIND%)
 exit /b 0
 
 :deps_ready
@@ -681,34 +700,40 @@ echo   Phone attached: !PHONE!  ^(Android !PHONE_OS!^)
 exit /b 0
 
 :lan_url
-rem Prints the address the phone must use for the API on the local network.
-rem Windows Mobile Hotspot always gives the host 192.168.137.1 (Internet
-rem Connection Sharing), so prefer that when the machine hosts the hotspot.
+rem Works out the address other devices reach the API on and stores it in
+rem PHONE_URL (plus NET_KIND, a short label). Windows Mobile Hotspot always
+rem gives the host 192.168.137.1 through Internet Connection Sharing, so that
+rem wins over any other adapter; APIPA addresses are ignored outright.
 set "LAN_IP="
 set "HOTSPOT_IP="
+set "PHONE_HOT="
 set "LAN_ALT="
+set "NET_KIND=same Wi-Fi"
 for /f "tokens=2 delims=:" %%I in ('ipconfig ^| findstr /c:"IPv4"') do (
   set "IP=%%I"
   set "IP=!IP: =!"
-  rem Skip loopback and APIPA (169.254.x = adapter with no real address).
   if /i not "!IP:~0,4!"=="127." if /i not "!IP:~0,8!"=="169.254." (
     if not defined LAN_ALT set "LAN_ALT=!IP!"
     if "!IP!"=="192.168.137.1" set "HOTSPOT_IP=!IP!"
+    if /i "!IP:~0,12!"=="192.168.43." set "PHONE_HOT=!IP!"
     if /i "!IP:~0,8!"=="192.168." set "LAN_IP=!IP!"
   )
 )
-if defined HOTSPOT_IP set "LAN_IP=!HOTSPOT_IP!"
-if not defined LAN_IP if defined LAN_ALT set "LAN_IP=!LAN_ALT!"
-if not defined LAN_IP set "LAN_IP=YOUR-PC-IP"
-set "PHONE_URL=%LAN_IP%:%API_PORT%"
-echo   Server address for the phone: %PHONE_URL%
 if defined HOTSPOT_IP (
-  echo   ^(your phone is on this PC's hotspot - that address is the gateway
-  echo   the phone shows under the Wi-Fi network it joined^)
+  set "LAN_IP=!HOTSPOT_IP!"
+  set "NET_KIND=PC hotspot"
 ) else (
-  echo   ^(both on the same Wi-Fi/hotspot; if the phone cannot reach it, check
-  echo   the gateway address the phone lists for that network^)
+  if defined PHONE_HOT (
+    set "LAN_IP=!PHONE_HOT!"
+    set "NET_KIND=phone hotspot"
+  )
 )
+if not defined LAN_IP if defined LAN_ALT set "LAN_IP=!LAN_ALT!"
+if not defined LAN_IP (
+  set "LAN_IP=YOUR-PC-IP"
+  set "NET_KIND=no network - start the hotspot or join Wi-Fi"
+)
+set "PHONE_URL=%LAN_IP%:%API_PORT%"
 exit /b 0
 
 :ensure_firewall
