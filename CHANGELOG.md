@@ -10,6 +10,13 @@ All notable changes to CivicAI. Versions follow [SemVer](https://semver.org/).
   start API + website, start either one alone, open the mobile app in the emulator against
   this PC, reset app data, stop servers. Each action is also reachable as an argument
   (`start-civicai.bat 4`) for scripting.
+- Launcher installs its own dependencies: creates `.venv` and installs
+  `backend/requirements.txt`, runs `npm ci` in `dashboard` and `flutter pub get` in
+  `mobile` when the packages are missing, so a fresh clone needs only Python, Node.js
+  and Flutter on `PATH`. Option 8 forces the whole check; the status block shows
+  whether anything is still missing.
+- Launcher option 7 builds the release APK and installs it on a USB-attached phone,
+  then prints the LAN address the phone must use for the API.
 
 ### Fixed
 
@@ -21,6 +28,20 @@ All notable changes to CivicAI. Versions follow [SemVer](https://semver.org/).
   `emulator` + the Android 14 system image, creates an `ms_test` AVD when none is present,
   reuses an existing AVD otherwise, verifies the APK actually registered, and prints
   manual setup steps instead of stalling when the SDK cannot be installed.
+- `start-civicai.bat` broke the API window once the virtualenv existed: `cmd /k` received
+  the unquoted `.venv\Scripts\python.exe` path and split it at the space in the repo
+  folder name. The launcher now quotes it.
+- Installing the APK on a phone failed with no explanation. The launcher now reports
+  adb's own error with the matching cause, retries the non-streaming installer, and
+  uninstalls-then-reinstalls when the phone holds a build signed with a different key.
+
+### Changed
+
+- Android release builds are signed with a real keystore instead of the debug key.
+  `mobile/android/app/build.gradle.kts` reads `mobile/android/key.properties` (created
+  once by the launcher, both files gitignored) and falls back to the debug key when it
+  is absent. One stable key means a newer APK upgrades the installed app instead of
+  being rejected with `App not installed`, and Play Protect stops flagging the build.
 
 ## [1.2.1] — 2026-11-14
 

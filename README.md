@@ -84,6 +84,8 @@ Password for every seeded account: `DemoPass1!`
 | 4 | Opens the app in the emulator: installs any missing SDK pieces (platform-tools, emulator, Android 14 system image with a prompt), creates an AVD if none exists, boots it, installs the current APK, and launches it against this PC (`10.0.2.2:8000`) |
 | 5 | Clears app data so the mobile app falls back to `10.0.2.2:8000` |
 | 6 | Stops whatever is listening on 8000 and 5173 |
+| 7 | Builds the release APK and installs it on the phone plugged in by USB, then prints the address the phone must use for the API |
+| 8 | Installs/repairs every dependency: Python venv + `backend/requirements.txt`, `npm ci` in `dashboard`, `flutter pub get` in `mobile`, and the release signing key |
 | 0 | Exit |
 
 Double-click it, or run one action directly:
@@ -92,10 +94,14 @@ Double-click it, or run one action directly:
 start-civicai.bat        # menu
 start-civicai.bat 1      # API + website, no menu
 start-civicai.bat 4      # open the app in the emulator
+start-civicai.bat 7      # build + install on a USB phone
 ```
 
 The status block at the top shows whether the API, the website and the emulator are
-already up. Both servers stay running in their own windows when the launcher closes.
+already up, and whether the dependencies are installed. Options 1, 2, 3 and 4 install
+whatever they need on first use (backed by a virtualenv in `.venv`), so a fresh clone
+only needs Python, Node.js and Flutter on `PATH`. Both servers stay running in their
+own windows when the launcher closes.
 
 Option 4 needs the Android SDK; if `adb`, the emulator or a system image is missing it
 offers to download them (~1.5 GB, one time) and creates an `ms_test` AVD automatically.
@@ -104,17 +110,39 @@ instead of failing silently.
 
 ## Install the Android app
 
-1. Download `app-release.apk` from the latest release:
+The app needs **Android 7.0 (API 24) or newer** — that is Flutter's own floor, so older
+phones cannot install it at all.
+
+1. Either plug the phone in with USB debugging on and run option 7, or download
+   `app-release.apk` from the latest release:
    <https://github.com/GigaVolt3/Smart-city/releases/latest/download/app-release.apk>
-2. Allow installs from the browser/file manager when prompted (signed with a debug
-   keystore — fine for demos, not for Play Store).
-3. Run the API so the phone can reach it:
+2. Allow installs from the browser/file manager when prompted. Builds made by the
+   launcher are signed with `mobile/android/keystore/civicai-release.jks`, which it
+   creates once and then reuses, so later builds upgrade the installed app instead of
+   being rejected.
+3. Run the API so the phone can reach it — option 7 prints the exact address:
    `python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000`
 4. In the app, tap **Change** next to `Server:` on the sign-in screen and enter the host
    running the API — `10.0.2.2:8000` inside the Android emulator, or
    `<your-computer-ip>:8000` for a phone on the same Wi-Fi. `/api/v1` is appended
    automatically.
 5. Sign in with `citizen@demo.civicai` / `DemoPass1!` (or officer, supervisor, admin).
+
+### When the phone refuses to install the APK
+
+The launcher prints adb's own error and what it means, and it retries automatically on
+the two most common failures (an older build signed with a different key, and a broken
+streamed install). The usual causes, in order of frequency:
+
+| Phone says | Cause | Fix |
+| --- | --- | --- |
+| `App not installed` | An older CivicAI build signed with a different key is already there | Uninstall the old app, or let the launcher retry (it uninstalls for you) |
+| `App not installed as package appears to be invalid` | The file is not really an APK (interrupted download, renamed file) | Download again, or rebuild with option 7 |
+| `Blocked by Play Protect` | Play Protect does not recognise a sideloaded app | Tap **More details → Install anyway**, or turn Play Protect off while demoing |
+| `Can't install unknown apps` | The browser/file manager lacks the permission | Settings → Apps → Special access → Install unknown apps → allow that app |
+| Nothing happens at all | The phone is Android 6 or older | Not supported — use Android 7.0+ or the emulator |
+| `INSTALL_FAILED_USER_RESTRICTED` (Xiaomi/Redmi) | MIUI blocks USB installs by default | Developer options → **Install via USB** on, and sign in to the Mi account |
+
 
 ## Repository layout
 

@@ -45,9 +45,17 @@ flutter build web --release --dart-define=API_BASE_URL=https://api.example.gov/a
 
 The universal APK lands at `build/app/outputs/flutter-apk/app-release.apk`
 (~53 MB; `--split-per-abi` produces ~20 MB arm64 and ~22 MB armeabi-v7a variants).
-Release is signed with the debug keystore — fine for sideloading and demos, not for
-Play Store submission. Generate a proper keystore and add a `signingConfigs.release`
-block before publishing.
+
+Signing: if `mobile/android/key.properties` exists, the release build is signed with
+the key it points at. `start-civicai.bat` (option 7 or 8) creates that file plus
+`mobile/android/keystore/civicai-release.jks` once — both are gitignored. Keeping one
+key means a newer APK installs over the previous copy; a rebuild signed with a
+*different* key is rejected with `App not installed` until the old app is uninstalled.
+Without `key.properties` the build still works, falling back to the debug keystore.
+
+To sign a store build by hand, put your own values in `mobile/android/key.properties`
+(`storeFile`, `storePassword`, `keyAlias`, `keyPassword`) — the module reads them
+directly, so no Gradle edit is needed.
 
 On a physical phone the backend must be reachable over the network: either set the
 address from the login screen's **Change** link (no rebuild), or bake it in at build

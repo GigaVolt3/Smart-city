@@ -50,7 +50,9 @@ mobile/app.*.symbols
 mobile/app.*.map.json
 mobile/android/.gradle/
 mobile/android/.kotlin/
+mobile/android/build/
 mobile/android/captures/
+mobile/android/keystore/
 mobile/android/local.properties
 mobile/android/key.properties
 mobile/android/app/debug/
