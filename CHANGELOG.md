@@ -47,10 +47,10 @@ All notable changes to CivicAI. Versions follow [SemVer](https://semver.org/).
 
 - The launcher no longer scans the port table to draw its status block. `netstat -ano`
   takes ~18 s on this machine and the block probes two ports on every redraw, so the
-  menu took ~30 s to appear and "stop servers" took ~36 s. Both ports are now probed
-  with `curl` (milliseconds, exit code 7 means nothing is listening) and servers are
-  stopped by window title instead of by port scan; netstat is only consulted when a
-  server was started outside the launcher. Menu redraw 32 s → 0.16 s, stop 36 s → 0.6 s.
+  menu took ~30 s to appear. Both ports are now probed with `curl` (milliseconds, exit
+  code 7 means nothing is listening), and "stop servers" asks the OS for the listening
+  PIDs through a single PowerShell call, skipping it entirely when the ports are free.
+  Menu redraw 32 s → 0.16 s, stop 36 s → 0.15 s idle / 2.8 s with both servers up.
 - The backend dependency check is skipped once `.venv\.deps-ok` exists, which takes the
   API start from ~3.9 s to ~2.3 s. Option 8 still reinstalls unconditionally.
 

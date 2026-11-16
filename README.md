@@ -128,8 +128,31 @@ phones cannot install it at all.
    automatically.
 5. Sign in with `citizen@demo.civicai` / `DemoPass1!` (or officer, supervisor, admin).
 
-### When the phone refuses to install the APK
+### Which server address to type
 
+The app appends `/api/v1` itself, so enter only `host:port`.
+
+| Setup | Address |
+| --- | --- |
+| Phone joined the **PC's mobile hotspot** | `192.168.137.1:8000` — Windows Internet Connection Sharing always gives the host that address |
+| Phone and PC on the **same Wi-Fi router** | the PC's IPv4 from `ipconfig`, e.g. `192.168.1.20:8000` |
+| PC joined the **phone's hotspot** | the PC's address on that network, usually `192.168.43.x:8000` |
+| Android emulator | `10.0.2.2:8000` |
+
+To confirm on the phone: Settings → Wi-Fi → tap the connected network → **Gateway**.
+That gateway is the machine running the API. Option 7 prints the value it detects.
+
+If the phone reports "Cannot reach the CivicAI service" with the right address, it is
+almost always Windows Firewall: Windows created an allow rule for the system
+`python.exe`, but the launcher runs `.venv\Scripts\python.exe`, and inbound 8000 stays
+blocked on the Public profile. Run `start-civicai.bat` once as administrator (option 7
+adds the rule), or paste this in an Administrator Command Prompt:
+
+```bat
+netsh advfirewall firewall add rule name="CivicAI launcher" dir=in action=allow protocol=TCP localport=8000,5173
+```
+
+### When the phone refuses to install the APK
 The launcher prints adb's own error and what it means, and it retries automatically on
 the two most common failures (an older build signed with a different key, and a broken
 streamed install). The usual causes, in order of frequency:

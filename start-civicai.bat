@@ -156,8 +156,7 @@ goto action_done
 
 :do_stop
 echo Stopping API and website...
-call :kill_port %API_PORT%
-call :kill_port %WEB_PORT%
+call :kill_ports
 echo Done.
 goto action_done
 
@@ -167,6 +166,7 @@ call :wait_api
 if errorlevel 2 goto action_done
 call :require_phone
 if errorlevel 1 goto action_done
+call :ensure_firewall
 call :ensure_keystore
 call :build_apk
 if errorlevel 1 goto action_done
@@ -224,30 +224,34 @@ for /f "tokens=5" %%P in ('netstat -ano -p tcp ^| findstr /c:":%~1 " ^| findstr 
 if defined UP exit /b 0
 exit /b 1
 
-:kill_port
-rem Fast path: the launcher's own windows carry a known title, so no port scan.
-if "%~1"=="%API_PORT%" (
-  taskkill /FI "WINDOWTITLE eq CivicAI API*" /T /F > "%KILL_TXT%" 2>&1
-  findstr /i /c:"SUCCESS" "%KILL_TXT%" >nul 2>&1
-  if not errorlevel 1 (
-    echo   stopped the CivicAI API window
-    exit /b 0
-  )
+:kill_ports
+rem Window titles proved unreliable (cmd /k rewrites them to the command line),
+rem and netstat -ano costs ~18 s here, so ask the OS for the listening PIDs in a
+rem single PowerShell call - but skip it entirely when nothing is listening.
+call :port_up %API_PORT%
+if not errorlevel 1 goto kill_ports_powershell
+call :port_up %WEB_PORT%
+if not errorlevel 1 goto kill_ports_powershell
+echo   nothing is listening on %API_PORT% or %WEB_PORT%
+exit /b 0
+
+:kill_ports_powershell
+set "PS=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%PS%" goto kill_ports_netstat
+"%PS%" -NoProfile -Command "foreach ($p in %API_PORT%,%WEB_PORT%) { (Get-NetTCPConnection -State Listen -LocalPort $p -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess }" > "%KILL_TXT%" 2>nul
+for /f "usebackq delims=" %%P in ("%KILL_TXT%") do (
+  echo   stopping PID %%P
+  taskkill /PID %%P /T /F >nul 2>&1
 )
-if "%~1"=="%WEB_PORT%" (
-  taskkill /FI "WINDOWTITLE eq CivicAI Web*" /T /F > "%KILL_TXT%" 2>&1
-  findstr /i /c:"SUCCESS" "%KILL_TXT%" >nul 2>&1
-  if not errorlevel 1 (
-    echo   stopped the CivicAI Web window
-    exit /b 0
-  )
+exit /b 0
+
+:kill_ports_netstat
+for /f "tokens=5" %%P in ('netstat -ano -p tcp ^| findstr /c:":%API_PORT% " ^| findstr /i "LISTENING"') do (
+  echo   stopping PID %%P on port %API_PORT%
+  taskkill /PID %%P /T /F >nul 2>&1
 )
-rem Fallback: a server started by hand owns the port, so ask who is listening -
-rem but only if something is listening at all (the netstat scan is slow).
-call :port_up %~1
-if errorlevel 1 exit /b 0
-for /f "tokens=5" %%P in ('netstat -ano -p tcp ^| findstr /c:":%~1 " ^| findstr /i "LISTENING"') do (
-  echo   stopping PID %%P on port %~1
+for /f "tokens=5" %%P in ('netstat -ano -p tcp ^| findstr /c:":%WEB_PORT% " ^| findstr /i "LISTENING"') do (
+  echo   stopping PID %%P on port %WEB_PORT%
   taskkill /PID %%P /T /F >nul 2>&1
 )
 exit /b 0
@@ -678,18 +682,49 @@ exit /b 0
 
 :lan_url
 rem Prints the address the phone must use for the API on the local network.
+rem Windows Mobile Hotspot always gives the host 192.168.137.1 (Internet
+rem Connection Sharing), so prefer that when the machine hosts the hotspot.
 set "LAN_IP="
+set "HOTSPOT_IP="
 set "LAN_ALT="
 for /f "tokens=2 delims=:" %%I in ('ipconfig ^| findstr /c:"IPv4"') do (
   set "IP=%%I"
   set "IP=!IP: =!"
-  if not defined LAN_ALT set "LAN_ALT=!IP!"
-  if /i "!IP:~0,8!"=="192.168." set "LAN_IP=!IP!"
+  rem Skip loopback and APIPA (169.254.x = adapter with no real address).
+  if /i not "!IP:~0,4!"=="127." if /i not "!IP:~0,8!"=="169.254." (
+    if not defined LAN_ALT set "LAN_ALT=!IP!"
+    if "!IP!"=="192.168.137.1" set "HOTSPOT_IP=!IP!"
+    if /i "!IP:~0,8!"=="192.168." set "LAN_IP=!IP!"
+  )
 )
+if defined HOTSPOT_IP set "LAN_IP=!HOTSPOT_IP!"
 if not defined LAN_IP if defined LAN_ALT set "LAN_IP=!LAN_ALT!"
 if not defined LAN_IP set "LAN_IP=YOUR-PC-IP"
 set "PHONE_URL=%LAN_IP%:%API_PORT%"
 echo   Server address for the phone: %PHONE_URL%
+if defined HOTSPOT_IP (
+  echo   ^(your phone is on this PC's hotspot - that address is the gateway
+  echo   the phone shows under the Wi-Fi network it joined^)
+) else (
+  echo   ^(both on the same Wi-Fi/hotspot; if the phone cannot reach it, check
+  echo   the gateway address the phone lists for that network^)
+)
+exit /b 0
+
+:ensure_firewall
+rem Lets other devices reach the API. Windows creates an allow rule for the
+rem system python.exe only, and the launcher runs the .venv interpreter, so
+rem inbound 8000 stays blocked for the phone without this.
+netsh advfirewall firewall show rule name="CivicAI launcher" >nul 2>&1 && exit /b 0
+netsh advfirewall firewall add rule name="CivicAI launcher" dir=in action=allow protocol=TCP localport=%API_PORT%,%WEB_PORT% profile=private,public >nul 2>&1
+if not errorlevel 1 (
+  echo   Firewall : inbound TCP %API_PORT% and %WEB_PORT% allowed.
+  exit /b 0
+)
+echo   Firewall : other devices still cannot connect to port %API_PORT%.
+echo   Right-click start-civicai.bat and pick "Run as administrator" once, or
+echo   paste this in an Administrator Command Prompt:
+echo     netsh advfirewall firewall add rule name="CivicAI launcher" dir=in action=allow protocol=TCP localport=%API_PORT%,%WEB_PORT%
 exit /b 0
 
 :sleep
