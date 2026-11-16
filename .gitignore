@@ -94,6 +94,9 @@ logs/
 *.swp
 .history/
 
+# Scratch folder used while resolving merge conflicts
+git conflict/
+
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
