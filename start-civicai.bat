@@ -31,6 +31,7 @@ set "DEVICES_TXT=%TEMP%\civicai-devices.txt"
 set "PHONES_TXT=%TEMP%\civicai-phones.txt"
 set "BOOT_TXT=%TEMP%\civicai-boot.txt"
 set "INSTALL_TXT=%TEMP%\civicai-install.txt"
+set "KILL_TXT=%TEMP%\civicai-kill.txt"
 set "PHONE_INFO_TXT=%TEMP%\civicai-phone-info.txt"
 
 set "PY=python"
@@ -180,10 +181,12 @@ echo   citizen@demo.civicai / DemoPass1!
 goto action_done
 
 :do_deps
+set "FORCE_DEPS=1"
 call :ensure_python_deps
 call :ensure_node_deps
 call :ensure_flutter_deps
 call :ensure_keystore
+set "FORCE_DEPS="
 echo.
 echo   Dependency check finished. Anything that failed is listed above.
 goto action_done
@@ -209,13 +212,41 @@ if not exist "%ROOT%\dashboard\node_modules\vite\bin\vite.js" exit /b 1
 exit /b 0
 
 :port_up
+rem curl answers in milliseconds; `netstat -ano` costs ~18 s on this machine,
+rem and the status block probes two ports on every menu redraw.
+if exist "%CURL%" (
+  "%CURL%" -s -o nul -m 1 "http://127.0.0.1:%~1/" >nul 2>&1
+  if !errorlevel! EQU 7 exit /b 1
+  exit /b 0
+)
 set "UP="
-for /f "tokens=5" %%P in ('netstat -ano ^| findstr /c:":%~1 " ^| findstr /i "LISTENING"') do set "UP=1"
+for /f "tokens=5" %%P in ('netstat -ano -p tcp ^| findstr /c:":%~1 " ^| findstr /i "LISTENING"') do set "UP=1"
 if defined UP exit /b 0
 exit /b 1
 
 :kill_port
-for /f "tokens=5" %%P in ('netstat -ano ^| findstr /c:":%~1 " ^| findstr /i "LISTENING"') do (
+rem Fast path: the launcher's own windows carry a known title, so no port scan.
+if "%~1"=="%API_PORT%" (
+  taskkill /FI "WINDOWTITLE eq CivicAI API*" /T /F > "%KILL_TXT%" 2>&1
+  findstr /i /c:"SUCCESS" "%KILL_TXT%" >nul 2>&1
+  if not errorlevel 1 (
+    echo   stopped the CivicAI API window
+    exit /b 0
+  )
+)
+if "%~1"=="%WEB_PORT%" (
+  taskkill /FI "WINDOWTITLE eq CivicAI Web*" /T /F > "%KILL_TXT%" 2>&1
+  findstr /i /c:"SUCCESS" "%KILL_TXT%" >nul 2>&1
+  if not errorlevel 1 (
+    echo   stopped the CivicAI Web window
+    exit /b 0
+  )
+)
+rem Fallback: a server started by hand owns the port, so ask who is listening -
+rem but only if something is listening at all (the netstat scan is slow).
+call :port_up %~1
+if errorlevel 1 exit /b 0
+for /f "tokens=5" %%P in ('netstat -ano -p tcp ^| findstr /c:":%~1 " ^| findstr /i "LISTENING"') do (
   echo   stopping PID %%P on port %~1
   taskkill /PID %%P /T /F >nul 2>&1
 )
@@ -423,7 +454,16 @@ if not exist "%ROOT%\.venv\Scripts\python.exe" (
   )
 )
 set "PY=%ROOT%\.venv\Scripts\python.exe"
-"%PY%" -c "import fastapi, uvicorn, sqlalchemy, sklearn" >nul 2>&1 && exit /b 0
+rem The import probe costs ~1.5 s, so a marker written after a successful install
+rem makes the common start instant. Option 8 sets FORCE_DEPS and reinstalls.
+if not defined FORCE_DEPS (
+  if exist "%ROOT%\.venv\.deps-ok" exit /b 0
+  "%PY%" -c "import fastapi, uvicorn, sqlalchemy, sklearn" >nul 2>&1
+  if not errorlevel 1 (
+    > "%ROOT%\.venv\.deps-ok" echo 1
+    exit /b 0
+  )
+)
 echo   Installing the packages from backend\requirements.txt ...
 "%PY%" -m pip install --disable-pip-version-check --quiet --upgrade pip
 "%PY%" -m pip install --disable-pip-version-check -r "%ROOT%\backend\requirements.txt"
@@ -432,6 +472,7 @@ if errorlevel 1 (
   echo   pip could not install the backend packages - scroll up for the reason.
   exit /b 1
 )
+> "%ROOT%\.venv\.deps-ok" echo 1
 echo   Backend dependencies ready.
 exit /b 0
 
