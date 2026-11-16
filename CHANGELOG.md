@@ -16,6 +16,11 @@ All notable changes to CivicAI. Versions follow [SemVer](https://semver.org/).
 - Launcher waits use a real delay and `curl` health probes instead of `timeout`, which
   refuses to run when stdin is redirected; the API is polled until `/health` answers
   before the website or the app is opened.
+- Option 4 no longer hangs at `adb wait-for-device` when no emulator exists: it attaches
+  with a 2-minute timeout, checks the SDK, offers to download `platform-tools` +
+  `emulator` + the Android 14 system image, creates an `ms_test` AVD when none is present,
+  reuses an existing AVD otherwise, verifies the APK actually registered, and prints
+  manual setup steps instead of stalling when the SDK cannot be installed.
 
 ## [1.2.1] — 2026-11-14
 

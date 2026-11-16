@@ -81,7 +81,7 @@ Password for every seeded account: `DemoPass1!`
 | 1 | Starts the API (new window, `0.0.0.0:8000`) + web console (new window, `:5173`) and opens the site |
 | 2 | Starts only the API |
 | 3 | Starts only the web console |
-| 4 | Boots the `ms_test` emulator if needed, installs the current APK, and opens the app pointed at this PC (`10.0.2.2:8000`) |
+| 4 | Opens the app in the emulator: installs any missing SDK pieces (platform-tools, emulator, Android 14 system image with a prompt), creates an AVD if none exists, boots it, installs the current APK, and launches it against this PC (`10.0.2.2:8000`) |
 | 5 | Clears app data so the mobile app falls back to `10.0.2.2:8000` |
 | 6 | Stops whatever is listening on 8000 and 5173 |
 | 0 | Exit |
@@ -96,6 +96,11 @@ start-civicai.bat 4      # open the app in the emulator
 
 The status block at the top shows whether the API, the website and the emulator are
 already up. Both servers stay running in their own windows when the launcher closes.
+
+Option 4 needs the Android SDK; if `adb`, the emulator or a system image is missing it
+offers to download them (~1.5 GB, one time) and creates an `ms_test` AVD automatically.
+If Flutter is also absent and no APK was built yet, it points at the release download
+instead of failing silently.
 
 ## Install the Android app
 

@@ -30,10 +30,18 @@ if exist "%ROOT%\.venv\Scripts\python.exe" set "PY=%ROOT%\.venv\Scripts\python.e
 
 set "CURL=%SystemRoot%\System32\curl.exe"
 if not exist "%CURL%" set "CURL=curl"
-set "ADB=%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe"
+
+set "SDK=%LOCALAPPDATA%\Android\Sdk"
+set "ADB=%SDK%\platform-tools\adb.exe"
 if not exist "%ADB%" set "ADB=adb"
-set "EMULATOR=%LOCALAPPDATA%\Android\Sdk\emulator\emulator.exe"
+set "EMULATOR=%SDK%\emulator\emulator.exe"
 if not exist "%EMULATOR%" set "EMULATOR=emulator"
+set "SDKMANAGER=%SDK%\cmdline-tools\latest\bin\sdkmanager.bat"
+set "AVDMANAGER=%SDK%\cmdline-tools\latest\bin\avdmanager.bat"
+if not exist "%SDKMANAGER%" for /d %%D in ("%SDK%\cmdline-tools\*") do if exist "%%D\bin\sdkmanager.bat" set "SDKMANAGER=%%D\bin\sdkmanager.bat"
+if not exist "%AVDMANAGER%" for /d %%D in ("%SDK%\cmdline-tools\*") do if exist "%%D\bin\avdmanager.bat" set "AVDMANAGER=%%D\bin\avdmanager.bat"
+set "SYSIMAGE=system-images;android-34;google_apis;x86_64"
+set "AVD_TXT=%TEMP%\civicai-avds.txt"
 
 rem Direct action mode: `start-civicai.bat 4` runs one option and exits.
 set "CIVICAI_ARG=%~1"
@@ -235,10 +243,24 @@ exit /b 1
 
 :ensure_emulator
 call :device_ready && exit /b 0
+call :ensure_sdk
+if errorlevel 1 exit /b 1
+call :ensure_avd
+if errorlevel 1 exit /b 1
 echo Starting the %AVD% emulator...
 start "CivicAI Emulator" "%EMULATOR%" -avd %AVD% -netdelay none -netspeed full
-"%ADB%" wait-for-device
-echo Waiting for Android to finish booting ^(first boot can take a minute^)...
+echo Waiting for the emulator to attach ^(up to 2 minutes^)...
+for /l %%I in (1,1,60) do (
+  call :device_ready && goto emu_boot
+  call :sleep 2
+)
+echo.
+echo   The emulator did not attach. Look at the "CivicAI Emulator" window for errors.
+echo   If it complains about the AVD, delete %USERPROFILE%\.android\avd\%AVD%.avd and retry.
+exit /b 1
+
+:emu_boot
+echo Waiting for Android to finish booting ^(first boot can take a few minutes^)...
 for /l %%I in (1,1,150) do (
   if exist "%BOOT_TXT%" del "%BOOT_TXT%" >nul 2>&1
   "%ADB%" shell getprop sys.boot_completed > "%BOOT_TXT%" 2>nul
@@ -256,8 +278,79 @@ echo   The emulator did not finish booting in 5 minutes.
 echo   Start it once from Android Studio, then try option 4 again.
 exit /b 1
 
+rem Installs platform-tools + emulator + a system image when the SDK is missing.
+:ensure_sdk
+if exist "%ADB%" if exist "%EMULATOR%" exit /b 0
+echo.
+echo   The Android SDK is incomplete:
+echo     SDK folder : %SDK%
+echo     adb        : %ADB%
+echo     emulator   : %EMULATOR%
+echo.
+if not exist "%SDKMANAGER%" goto sdk_manual
+choice /c yn /n /m "  Download platform-tools, the emulator and a system image (~1.5 GB)? [y/n] "
+if errorlevel 2 goto sdk_manual
+echo   Accepting SDK licences...
+(echo y & echo y & echo y & echo y & echo y & echo y & echo y & echo y) | call "%SDKMANAGER%" --sdk_root="%SDK%" --licenses >nul 2>&1
+echo   Downloading SDK packages ^(several minutes^)...
+call "%SDKMANAGER%" --sdk_root="%SDK%" --install "platform-tools" "emulator" "platforms;android-34" "%SYSIMAGE%"
+if errorlevel 1 goto sdk_manual
+if not exist "%ADB%" goto sdk_manual
+if not exist "%EMULATOR%" goto sdk_manual
+echo   SDK components installed.
+exit /b 0
+
+:sdk_manual
+echo.
+echo   Install the Android emulator once, then run option 4 again:
+echo     1. Install Android Studio (includes the SDK, adb and the emulator)
+echo        https://developer.android.com/studio
+echo     2. Or with cmdline-tools on PATH:
+echo        sdkmanager --install "platform-tools" "emulator" "platforms;android-34" "%SYSIMAGE%"
+echo     3. Create an AVD named %AVD% in Android Studio ^(Device Manager^).
+echo.
+echo   You can still use the website ^(option 1^) and the published APK on a phone.
+exit /b 1
+
+rem Reuses any existing AVD; creates %AVD% from the installed system image if none.
+:ensure_avd
+"%EMULATOR%" -list-avds > "%AVD_TXT%" 2>nul
+findstr /x /c:"%AVD%" "%AVD_TXT%" >nul 2>&1 && exit /b 0
+for /f "usebackq delims=" %%A in ("%AVD_TXT%") do (
+  set "AVD=%%A"
+  echo   Using the existing emulator "!AVD!" instead of creating a new one.
+  exit /b 0
+)
+echo   No Android virtual device found - creating "%AVD%"...
+if not exist "%SDKMANAGER%" goto avd_manual
+if not exist "%SDK%\system-images\android-34\google_apis\x86_64\" (
+  echo   Downloading the system image ^(~1 GB^)...
+  (echo y & echo y & echo y & echo y & echo y) | call "%SDKMANAGER%" --sdk_root="%SDK%" --licenses >nul 2>&1
+  call "%SDKMANAGER%" --sdk_root="%SDK%" --install "%SYSIMAGE%"
+)
+if not exist "%SDK%\system-images\android-34\google_apis\x86_64\" goto avd_manual
+echo no | call "%AVDMANAGER%" create avd -n %AVD% -k "%SYSIMAGE%" -d pixel_6
+if errorlevel 1 goto avd_manual
+"%EMULATOR%" -list-avds > "%AVD_TXT%" 2>nul
+findstr /x /c:"%AVD%" "%AVD_TXT%" >nul 2>&1 && exit /b 0
+
+:avd_manual
+echo.
+echo   Could not create the emulator. Create one named %AVD% in Android Studio
+echo   ^(Device Manager ^> Create device ^> Pixel 6 ^> Android 14^), then retry.
+exit /b 1
+
 :ensure_app
 if not exist "%APK%" (
+  where flutter >nul 2>&1
+  if errorlevel 1 (
+    echo.
+    echo   No APK in mobile\build and Flutter is not on PATH.
+    echo   Download the ready build instead:
+    echo     https://github.com/GigaVolt3/Smart-city/releases/latest/download/app-release.apk
+    echo   Save it as: %APK%
+    exit /b 1
+  )
   echo Release APK not found - building it now ^(about a minute^)...
   pushd "%ROOT%\mobile"
   call flutter build apk --release
@@ -273,6 +366,12 @@ if errorlevel 1 (
   echo   Install failed. Re-run option 4, or check adb devices.
   exit /b 1
 )
+"%ADB%" shell pm list packages %PACKAGE% | findstr /c:"package:%PACKAGE%" >nul
+if errorlevel 1 (
+  echo   The APK did not register with the emulator - re-run option 4.
+  exit /b 1
+)
+echo APK installed.
 exit /b 0
 
 :sleep
