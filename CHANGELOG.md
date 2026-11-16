@@ -2,6 +2,21 @@
 
 All notable changes to CivicAI. Versions follow [SemVer](https://semver.org/).
 
+## [1.2.2] - 2026-11-16
+
+### Added
+
+- `start-civicai.bat`: Windows launcher with a live status block and one action per flow —
+  start API + website, start either one alone, open the mobile app in the emulator against
+  this PC, reset app data, stop servers. Each action is also reachable as an argument
+  (`start-civicai.bat 4`) for scripting.
+
+### Fixed
+
+- Launcher waits use a real delay and `curl` health probes instead of `timeout`, which
+  refuses to run when stdin is redirected; the API is polled until `/health` answers
+  before the website or the app is opened.
+
 ## [1.2.1] — 2026-11-14
 
 Release-APK fixes found while running the signed build on a real Android device.

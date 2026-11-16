@@ -72,6 +72,31 @@ Password for every seeded account: `DemoPass1!`
 | `supervisor@demo.civicai` | Supervisor, Roads |
 | `admin@demo.civicai` | Municipal administrator |
 
+## One-click launcher (Windows)
+
+`start-civicai.bat` in the repo root is a menu for the everyday flows:
+
+| Option | What it does |
+| --- | --- |
+| 1 | Starts the API (new window, `0.0.0.0:8000`) + web console (new window, `:5173`) and opens the site |
+| 2 | Starts only the API |
+| 3 | Starts only the web console |
+| 4 | Boots the `ms_test` emulator if needed, installs the current APK, and opens the app pointed at this PC (`10.0.2.2:8000`) |
+| 5 | Clears app data so the mobile app falls back to `10.0.2.2:8000` |
+| 6 | Stops whatever is listening on 8000 and 5173 |
+| 0 | Exit |
+
+Double-click it, or run one action directly:
+
+```bash
+start-civicai.bat        # menu
+start-civicai.bat 1      # API + website, no menu
+start-civicai.bat 4      # open the app in the emulator
+```
+
+The status block at the top shows whether the API, the website and the emulator are
+already up. Both servers stay running in their own windows when the launcher closes.
+
 ## Install the Android app
 
 1. Download `app-release.apk` from the latest release:
